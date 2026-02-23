@@ -22,3 +22,4 @@ scripts/node_modules/
 *.sw?
 *.privkey
 .claude/
+HACKATHON_FORM_PORTUS.md
