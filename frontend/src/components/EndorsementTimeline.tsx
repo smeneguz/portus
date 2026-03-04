@@ -13,7 +13,9 @@ function shortAddr(addr: string) {
 export default function EndorsementTimeline({ endorsements, currentHolder }: Props) {
   if (!endorsements.length) {
     return (
-      <div className="text-sm text-gray-500 italic p-4">No endorsements yet.</div>
+      <div className="rounded-xl border border-dashed border-[#c8d6e7] bg-[#f8fbff] p-4 text-sm italic text-[#5f7389]">
+        No endorsements yet.
+      </div>
     );
   }
 
@@ -27,16 +29,16 @@ export default function EndorsementTimeline({ endorsements, currentHolder }: Pro
         return (
           <div key={i} className="flex gap-3">
             <div className="flex flex-col items-center">
-              <div className={`w-3 h-3 rounded-full mt-1.5 ${isLast ? 'bg-green-500' : 'bg-blue-500'}`} />
-              {!isLast && <div className="w-0.5 flex-1 bg-gray-200" />}
+              <div className={`mt-1.5 h-3 w-3 rounded-full ${isLast ? 'bg-[#0e8d5b]' : 'bg-[#0e4fbf]'}`} />
+              {!isLast && <div className="w-0.5 flex-1 bg-[#d0dceb]" />}
             </div>
             <div className="pb-4">
-              <p className="text-sm font-medium">
+              <p className="text-sm font-semibold text-[#173a5a]">
                 <span className="font-mono text-xs">{shortAddr(e.from)}</span>
                 {' → '}
                 <span className="font-mono text-xs">{shortAddr(e.to)}</span>
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#5f7389]">
                 {type} &middot; {ts}
               </p>
             </div>
@@ -44,8 +46,8 @@ export default function EndorsementTimeline({ endorsements, currentHolder }: Pro
         );
       })}
       <div className="flex gap-3 items-center">
-        <div className="w-3 h-3 rounded-full bg-green-500 ring-2 ring-green-200" />
-        <p className="text-sm font-medium text-green-700">
+        <div className="h-3 w-3 rounded-full bg-[#0e8d5b] ring-2 ring-[#c8ebdc]" />
+        <p className="text-sm font-semibold text-[#0e6a47]">
           Current holder: <span className="font-mono text-xs">{shortAddr(currentHolder)}</span>
         </p>
       </div>

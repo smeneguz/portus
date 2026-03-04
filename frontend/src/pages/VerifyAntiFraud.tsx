@@ -27,89 +27,87 @@ export default function VerifyAntiFraud() {
         const fields = (obj.data.content as any).fields;
         setEbl(parseEBLFields(fields));
       } else {
-        setError('Object not found or not an eBL.');
+        setError('Object not found or not a valid eBL move object.');
       }
     } catch {
-      setError('Failed to fetch object. Check the ID and try again.');
+      setError('Lookup failed. Verify the object ID and network configuration.');
     }
     setLoading(false);
   };
 
   return (
-    <div className="space-y-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-800">Verify eBL</h1>
-        <p className="text-gray-500 mt-2">Anti-fraud verification - check any Bill of Lading against the on-chain record.</p>
-      </div>
+    <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Anti-fraud verification</h2>
+        <p className="section-subtitle mt-1">
+          Resolve an eBL directly from IOTA, inspect its live status and compare document hash with the uploaded file.
+        </p>
 
-      {/* Search */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl mx-auto">
-        <label className="block text-sm font-medium text-gray-700 mb-1">eBL Object ID</label>
-        <div className="flex gap-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
           <input
-            className="border rounded px-3 py-2 text-sm font-mono flex-1"
-            placeholder="0x..."
+            className="field-input font-mono text-xs"
+            placeholder="Paste eBL object ID (0x...)"
             value={objectId}
             onChange={(e) => setObjectId(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           />
-          <button
-            onClick={handleLookup}
-            disabled={loading}
-            className="bg-blue-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Looking up...' : 'Verify'}
+          <button onClick={handleLookup} disabled={loading || !objectId} className="btn-main">
+            {loading ? 'Resolving...' : 'Verify eBL'}
           </button>
         </div>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      </div>
 
-      {/* Results */}
+        {error && <p className="mt-3 rounded-lg border border-[#f2c2c2] bg-[#fff0f0] px-3 py-2 text-sm text-[#9f2d2d]">{error}</p>}
+      </section>
+
       {ebl && (
-        <div className="space-y-6 max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-start justify-between mb-4">
+        <div className="space-y-6">
+          <section className="surface p-5 md:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-800">{ebl.bl_number}</h2>
-                <p className="text-gray-500">{ebl.vessel_name} &middot; Voyage {ebl.voyage_number}</p>
-                <p className="text-gray-500">{ebl.port_of_loading} &rarr; {ebl.port_of_discharge}</p>
+                <h3 className="text-2xl font-bold tracking-tight text-[#0f2f50]">{ebl.bl_number}</h3>
+                <p className="mt-1 text-sm text-[#5f7389]">{ebl.vessel_name} · Voyage {ebl.voyage_number}</p>
+                <p className="text-sm text-[#5f7389]">{ebl.port_of_loading} → {ebl.port_of_discharge}</p>
               </div>
               <BLStatusBadge status={Number(ebl.status)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Carrier</p>
-                <p className="font-mono text-xs">{ebl.carrier.slice(0, 10)}...{ebl.carrier.slice(-6)}</p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+                <p className="text-xs uppercase tracking-wide text-[#60758c]">Carrier</p>
+                <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{ebl.carrier}</p>
               </div>
-              <div>
-                <p className="text-gray-500">Current Holder</p>
-                <p className="font-mono text-xs">{ebl.current_holder.slice(0, 10)}...{ebl.current_holder.slice(-6)}</p>
+              <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+                <p className="text-xs uppercase tracking-wide text-[#60758c]">Current holder</p>
+                <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{ebl.current_holder}</p>
               </div>
-              <div>
-                <p className="text-gray-500">Endorsements</p>
-                <p>{ebl.endorsement_count}</p>
+              <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+                <p className="text-xs uppercase tracking-wide text-[#60758c]">Endorsements</p>
+                <p className="mt-1 text-sm font-semibold text-[#1e3a58]">{ebl.endorsement_count}</p>
               </div>
-              <div>
-                <p className="text-gray-500">Commodity</p>
-                <p>{ebl.commodity_description}</p>
+              <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+                <p className="text-xs uppercase tracking-wide text-[#60758c]">Commodity</p>
+                <p className="mt-1 text-sm font-semibold text-[#1e3a58]">{ebl.commodity_description}</p>
               </div>
             </div>
 
-            <a href={explorerObjectUrl(objectId)} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline mt-4 inline-block">
-              View on IOTA Explorer
+            <a href={explorerObjectUrl(objectId)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-xs font-semibold text-[#0e4fbf] underline">
+              Open object in IOTA Explorer
             </a>
-          </div>
+          </section>
 
-          {/* Anti-Fraud Document Verification */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Anti-Fraud Check</h3>
-            <div className="mb-4 p-3 bg-gray-50 rounded">
-              <p className="text-xs text-gray-500">On-chain content hash:</p>
-              <p className="font-mono text-xs break-all">{ebl.content_hash}</p>
+          <section className="surface p-5 md:p-6">
+            <h3 className="text-lg font-bold text-[#123a61]">Document integrity check</h3>
+            <p className="mt-1 text-sm text-[#5f7389]">Upload the BoL file and compare the computed hash with the notarized value.</p>
+
+            <div className="mt-4 rounded-xl border border-[#d7e2ef] bg-[#f4f8ff] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">On-chain content hash</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{ebl.content_hash}</p>
             </div>
-            <DocumentVerifier onChainHash={ebl.content_hash} />
-          </div>
+
+            <div className="mt-4">
+              <DocumentVerifier onChainHash={ebl.content_hash} />
+            </div>
+          </section>
         </div>
       )}
     </div>

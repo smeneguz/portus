@@ -1,1 +1,145 @@
 @import "tailwindcss";
+
+:root {
+  --bg-1: #f4f8ff;
+  --bg-2: #edf6ff;
+  --surface: #ffffff;
+  --ink: #10263f;
+  --muted: #5f7389;
+  --line: #d8e2ef;
+  --brand: #0e4fbf;
+  --brand-soft: #dbe8ff;
+  --ok: #0c7f53;
+  --warn: #ab6a00;
+  --err: #ba2c2c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Sora", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 500px at 12% -10%, #cfe4ff 0%, transparent 55%),
+    radial-gradient(1000px 420px at 92% -12%, #dff5f2 0%, transparent 56%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-2));
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-container {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.surface {
+  background: color-mix(in oklab, var(--surface), #f6fbff 15%);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 10px 34px rgba(16, 38, 63, 0.08);
+}
+
+.section-title {
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f2f50;
+}
+
+.section-subtitle {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #26415d;
+}
+
+.field-input {
+  width: 100%;
+  border: 1px solid #cfd9e8;
+  border-radius: 12px;
+  padding: 0.62rem 0.8rem;
+  font-size: 0.9rem;
+  color: #163251;
+  background: #ffffff;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: #7ca8f8;
+  box-shadow: 0 0 0 4px rgba(14, 79, 191, 0.13);
+}
+
+.btn-main,
+.btn-alt,
+.btn-success {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.62rem 1rem;
+  font-size: 0.87rem;
+  font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+  cursor: pointer;
+}
+
+.btn-main {
+  background: linear-gradient(120deg, #0f5dd9, #0a468d);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(14, 79, 191, 0.26);
+}
+
+.btn-success {
+  background: linear-gradient(120deg, #0f8b5a, #0a6a44);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(12, 127, 83, 0.24);
+}
+
+.btn-alt {
+  background: #e9f1ff;
+  color: #164579;
+}
+
+.btn-main:hover,
+.btn-success:hover,
+.btn-alt:hover {
+  transform: translateY(-1px);
+}
+
+.btn-main:disabled,
+.btn-success:disabled,
+.btn-alt:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
+.fade-in {
+  animation: fade-in-up 0.35s ease-out;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

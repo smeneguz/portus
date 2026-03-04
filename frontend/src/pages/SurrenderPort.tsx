@@ -3,6 +3,11 @@ import { useCurrentAccount } from '@iota/dapp-kit';
 import { useSurrender, useAccomplish } from '../hooks/useEBL';
 import { explorerTxUrl } from '../config/constants';
 
+type Banner = {
+  tone: 'ok' | 'error';
+  text: string;
+};
+
 export default function SurrenderPort() {
   const account = useCurrentAccount();
   const { surrender, isPending: surrenderPending } = useSurrender();
@@ -10,103 +15,100 @@ export default function SurrenderPort() {
 
   const [eblId, setEblId] = useState('');
   const [lastTx, setLastTx] = useState('');
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<Banner | null>(null);
 
   const handleSurrender = async () => {
+    setMessage(null);
     try {
       const result = await surrender(eblId);
       if (result.digest) {
         setLastTx(result.digest);
-        setMessage('eBL surrendered successfully! Goods can now be released.');
       }
+      setMessage({ tone: 'ok', text: 'eBL surrendered successfully. Carrier can now confirm cargo release.' });
     } catch (err) {
       console.error('Surrender failed:', err);
-      setMessage('Surrender failed. Make sure you are the current holder.');
+      setMessage({ tone: 'error', text: 'Surrender failed. Ensure you are the current eBL holder.' });
     }
   };
 
   const handleAccomplish = async () => {
+    setMessage(null);
     try {
       const result = await accomplish(eblId);
       if (result.digest) {
         setLastTx(result.digest);
-        setMessage('Goods released! eBL is now accomplished.');
       }
+      setMessage({ tone: 'ok', text: 'Goods release confirmed. eBL status is now accomplished.' });
     } catch (err) {
       console.error('Accomplish failed:', err);
-      setMessage('Accomplish failed. Make sure the eBL is surrendered and you are the carrier.');
+      setMessage({ tone: 'error', text: 'Accomplish failed. eBL must be surrendered and signed by the carrier.' });
     }
   };
 
   if (!account) {
     return (
-      <div className="text-center py-16">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">Surrender at Port</h1>
-        <p className="text-gray-500">Connect your wallet to surrender or release eBLs.</p>
+      <div className="surface p-10 text-center">
+        <h2 className="section-title">Port Release</h2>
+        <p className="section-subtitle mt-2">Connect your wallet to perform surrender or accomplish actions.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-800">Surrender at Port</h1>
+    <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Surrender and cargo release</h2>
+        <p className="section-subtitle mt-1">Use the same eBL object ID for both operations, signed by the correct role.</p>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1">eBL Object ID</label>
-        <input
-          className="border rounded px-3 py-2 text-sm font-mono w-full mb-6"
-          placeholder="0x..."
-          value={eblId}
-          onChange={(e) => setEblId(e.target.value)}
-        />
+        <div className="mt-4">
+          <label className="field-label">eBL object ID</label>
+          <input
+            className="field-input font-mono text-xs"
+            placeholder="0x..."
+            value={eblId}
+            onChange={(e) => setEblId(e.target.value)}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Consignee: Surrender */}
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">For Consignees</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Surrender the eBL to the carrier to release goods.
-            </p>
-            <button
-              onClick={handleSurrender}
-              disabled={surrenderPending || !eblId}
-              className="bg-purple-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-purple-700 disabled:opacity-50 w-full"
-            >
-              {surrenderPending ? 'Surrendering...' : 'Surrender eBL'}
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-[#d4e0ee] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#60758c]">Role: Consignee</p>
+            <h3 className="mt-1 text-lg font-bold text-[#123a61]">Surrender eBL</h3>
+            <p className="mt-2 text-sm text-[#5f7389]">Transfer documentary control back to the carrier before release.</p>
+            <button onClick={handleSurrender} disabled={surrenderPending || !eblId} className="btn-main mt-4 w-full">
+              {surrenderPending ? 'Surrendering...' : 'Surrender'}
             </button>
           </div>
 
-          {/* Carrier: Accomplish */}
-          <div className="border rounded-lg p-4">
-            <h3 className="font-semibold text-gray-700 mb-2">For Carriers</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Confirm goods have been released after surrender.
-            </p>
-            <button
-              onClick={handleAccomplish}
-              disabled={accomplishPending || !eblId}
-              className="bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 w-full"
-            >
-              {accomplishPending ? 'Confirming...' : 'Confirm Goods Released'}
+          <div className="rounded-2xl border border-[#d4e0ee] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#60758c]">Role: Carrier</p>
+            <h3 className="mt-1 text-lg font-bold text-[#123a61]">Confirm release</h3>
+            <p className="mt-2 text-sm text-[#5f7389]">Finalize delivery after valid surrender to close the eBL lifecycle.</p>
+            <button onClick={handleAccomplish} disabled={accomplishPending || !eblId} className="btn-success mt-4 w-full">
+              {accomplishPending ? 'Confirming...' : 'Accomplish'}
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {message && (
-        <div className={`rounded-lg p-4 border ${message.includes('failed') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
-          <p className="text-sm font-medium">{message}</p>
+        <div
+          className={`rounded-xl border p-3 text-sm ${
+            message.tone === 'ok'
+              ? 'border-[#b7e6d3] bg-[#eafaf3] text-[#0e6a47]'
+              : 'border-[#f2c2c2] bg-[#fff0f0] text-[#9f2d2d]'
+          }`}
+        >
+          {message.text}
         </div>
       )}
 
       {lastTx && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            Transaction:{' '}
-            <a href={explorerTxUrl(lastTx)} target="_blank" rel="noopener noreferrer" className="underline font-mono text-xs">
-              {lastTx.slice(0, 16)}...
-            </a>
-          </p>
+        <div className="rounded-xl border border-[#c9dff8] bg-[#eef6ff] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#3a6289]">Last transaction</p>
+          <a href={explorerTxUrl(lastTx)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block font-mono text-xs text-[#0e4fbf] underline">
+            {lastTx}
+          </a>
         </div>
       )}
     </div>

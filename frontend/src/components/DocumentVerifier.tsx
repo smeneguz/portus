@@ -26,29 +26,29 @@ export default function DocumentVerifier({ onChainHash }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Upload document to verify</label>
+        <label className="field-label">Upload document to verify</label>
         <input
           type="file"
           onChange={handleFile}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          className="block w-full rounded-xl border border-[#cfd9e8] bg-white p-2.5 text-sm text-[#4f657d] file:mr-3 file:rounded-lg file:border-0 file:bg-[#e6efff] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0e4fbf]"
         />
-        {computing && <p className="text-sm text-gray-500 mt-1">Computing hash...</p>}
-        {fileName && !computing && <p className="text-sm text-gray-500 mt-1">File: {fileName}</p>}
+        {computing && <p className="mt-1 text-sm text-[#5f7389]">Computing hash...</p>}
+        {fileName && !computing && <p className="mt-1 text-sm text-[#5f7389]">File: {fileName}</p>}
       </div>
 
       {match && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-          <p className="text-green-800 font-semibold">Authentic &mdash; matches on-chain record</p>
-          <p className="text-xs text-green-600 font-mono mt-1 break-all">Hash: {uploadedHash}</p>
+        <div className="rounded-xl border border-[#b7e6d3] bg-[#eafaf3] p-4">
+          <p className="font-semibold text-[#0e6a47]">Authentic: uploaded file matches the on-chain record.</p>
+          <p className="mt-1 break-all font-mono text-xs text-[#1f6b4f]">Hash: {uploadedHash}</p>
         </div>
       )}
 
       {mismatch && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-          <p className="text-red-800 font-semibold">FRAUD DETECTED &mdash; hash does not match notarised document</p>
-          <div className="mt-2 text-xs font-mono space-y-1">
-            <p className="text-green-700 break-all">On-chain: {onChainHash}</p>
-            <p className="text-red-700 break-all">Uploaded: {uploadedHash}</p>
+        <div className="rounded-xl border border-[#f2c2c2] bg-[#fff0f0] p-4">
+          <p className="font-semibold text-[#9f2d2d]">Mismatch detected: uploaded file does not match notarized hash.</p>
+          <div className="mt-2 space-y-1 font-mono text-xs">
+            <p className="break-all text-[#1e6d4f]">On-chain: {onChainHash}</p>
+            <p className="break-all text-[#9f2d2d]">Uploaded: {uploadedHash}</p>
           </div>
         </div>
       )}
