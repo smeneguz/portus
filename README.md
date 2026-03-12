@@ -7,7 +7,8 @@
 
 <p align="center">
   Electronic Bill of Lading protocol on <strong>IOTA Move</strong>.<br/>
-  Carrier issues, shipper endorses, bank endorses, consignee surrenders at port.
+  Carrier issues, shipper endorses, bank endorses, consignee surrenders at port.<br/>
+  Includes an interoperability control layer for cross-platform trade document settlement.
 </p>
 
 ---
@@ -25,25 +26,26 @@ The paper Bill of Lading passes through 20-30 hands per shipment, arrives after 
 ```
 +--------------------------------------------------+
 |              IOTA Move Contracts                  |
-+----------+----------+------------+----------------+
-|  ebl     | endorse  | notarize   | carrier_reg    |
-|          | ment     |            |                |
-+----------+----------+------------+----------------+
++----------+----------+------------+----------------+----------------+
+|  ebl     | endorse  | notarize   | carrier_reg    | interop_ctrl   |
+|          | ment     |            |                |                |
++----------+----------+------------+----------------+----------------+
 |           React + @iota/dapp-kit                  |
 +--------------------------------------------------+
 ```
 
-**4 Move modules** -- `ebl` (lifecycle), `endorsement` (chain of title), `notarization` (hash anchoring), `carrier_registry` (identity).
+**5 Move modules** -- `ebl` (lifecycle), `endorsement` (chain of title), `notarization` (hash anchoring), `carrier_registry` (identity), `interop_control` (decentralized control tracking / settlement).
 
-**5 frontend pages** -- Carrier Dashboard, eBL Viewer, Transfer/Endorse, Surrender/Accomplish, Verify/Anti-Fraud.
+**6 frontend pages** -- Carrier Dashboard, eBL Viewer, Transfer/Endorse, Surrender/Accomplish, Verify/Anti-Fraud, Interop Layer.
 
 ## Deployed (testnet)
 
 | Object | ID |
 |--------|----|
-| Package | `0xcd4c2548a8995de4ad5aa8af33c76cf846b86a2eccafc99311afc33fe2c97159` |
-| BLRegistry | `0xce1750a4c1cc8dff96ecdfdf61cd6be649283f58abd7e5f16e13c9b32b48be8e` |
-| CarrierRegistry | `0x6e6f141e6ffb7ba7323a1e8a34924cac7920a84f5aadb38f4b4be0332f7e70a4` |
+| Package | from `scripts/deploy.sh` output |
+| BLRegistry | from `scripts/deploy.sh` output |
+| CarrierRegistry | from `scripts/deploy.sh` output |
+| InteropRegistry | from `scripts/deploy.sh` output |
 
 ## Prerequisites
 
@@ -99,12 +101,13 @@ npx tsx e2e-test.ts
 | `endorsement` | Chain of title transfers | `create_chain`, `endorse_and_transfer` |
 | `notarization` | Document hash anchoring | `notarize`, `verify`, `batch_notarize` |
 | `carrier_registry` | Carrier identity | `register`, `increment_bls` |
+| `interop_control` | Universal control-settlement layer for trade docs | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
 
 ## Testing
 
-**Move unit tests** -- 14 tests, 14 passed
+**Move unit tests** -- 18 tests, 18 passed
 
-Covers: registry init, carrier registration, eBL issuance, status updates, endorsement chain (shipper to bank to consignee), surrender + accomplish, anti-fraud hash verification, batch notarization, unauthorized status update rejection, unauthorized surrender rejection, unauthorized endorsement rejection.
+Covers: registry init, carrier registration, eBL issuance, status updates, endorsement chain (shipper to bank to consignee), surrender + accomplish, anti-fraud hash verification, batch notarization, interoperability control-token registration, initiate/accept transfer handshake, unauthorized status update rejection, unauthorized surrender rejection, unauthorized endorsement rejection.
 
 **E2E integration tests** -- 11 tests, 11 passed (0.0221 IOTA gas)
 
@@ -133,11 +136,13 @@ portus/
       endorsement.move
       notarization.move
       carrier_registry.move
+      interop_control.move
     tests/
       ebl_tests.move
       endorsement_tests.move
       notarization_tests.move
       carrier_registry_tests.move
+      interop_control_tests.move
   frontend/
     public/
       favicon.svg

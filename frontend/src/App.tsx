@@ -6,12 +6,14 @@ import EBLViewer from './pages/EBLViewer';
 import TransferEndorse from './pages/TransferEndorse';
 import SurrenderPort from './pages/SurrenderPort';
 import VerifyAntiFraud from './pages/VerifyAntiFraud';
+import InteropLayer from './pages/InteropLayer';
 
 const NAV_ITEMS = [
   { path: '/carrier', label: 'Carrier Desk', subtitle: 'Issue and register eBL', step: '01' },
   { path: '/transfer', label: 'Transfer Hub', subtitle: 'Endorse and hand over title', step: '02' },
   { path: '/surrender', label: 'Port Release', subtitle: 'Surrender and accomplish cargo', step: '03' },
   { path: '/verify', label: 'Anti-Fraud', subtitle: 'Validate notarized document hash', step: '04' },
+  { path: '/interop', label: 'Interop Layer', subtitle: 'Universal control settlement flow', step: '05' },
 ];
 
 function pageMeta(pathname: string) {
@@ -122,6 +124,7 @@ export default function App() {
               <Route path="/transfer" element={<TransferEndorse />} />
               <Route path="/surrender" element={<SurrenderPort />} />
               <Route path="/verify" element={<VerifyAntiFraud />} />
+              <Route path="/interop" element={<InteropLayer />} />
             </Routes>
           </section>
         </div>
