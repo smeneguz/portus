@@ -15,6 +15,7 @@ import {
   useInitiateInteropTransfer,
   useRegisterInteropDocument,
 } from '../hooks/useInterop';
+import { recordTx } from '../utils/txHistory';
 
 type Banner = {
   tone: 'ok' | 'error';
@@ -73,12 +74,33 @@ export default function InteropLayer() {
         documentType,
         sourcePlatform,
       });
-      const createdId = readCreatedControlId(result);
+      let createdId = readCreatedControlId(result);
+      if (!createdId && result.digest) {
+        try {
+          const tx = await client.getTransactionBlock({
+            digest: result.digest,
+            options: { showObjectChanges: true },
+          });
+          createdId = readCreatedControlId(tx);
+        } catch (resolveErr) {
+          console.warn('Failed to resolve created control object from tx:', resolveErr);
+        }
+      }
       if (createdId) {
         setDocumentId(createdId);
         setLookupId(createdId);
       }
-      if (result.digest) setLastTx(result.digest);
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Interop Register Document',
+          area: 'interop',
+          referenceId: createdId || undefined,
+          referenceLabel: 'Control Object ID',
+          details: `${documentType} from ${INTEROP_PLATFORM_LABELS[sourcePlatform] || `Platform ${sourcePlatform}`}`,
+        });
+      }
       setBanner({ tone: 'ok', text: 'Document envelope registered on decentralized control registry.' });
     } catch (err) {
       console.error(err);
@@ -95,7 +117,17 @@ export default function InteropLayer() {
         toPlatform,
         proofHash,
       });
-      if (result.digest) setLastTx(result.digest);
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Interop Initiate Transfer',
+          area: 'interop',
+          referenceId: documentId || undefined,
+          referenceLabel: 'Control Object ID',
+          details: `To ${toController} on ${INTEROP_PLATFORM_LABELS[toPlatform] || `Platform ${toPlatform}`}`,
+        });
+      }
       setBanner({ tone: 'ok', text: 'Transfer initiated. Pending recipient acceptance.' });
     } catch (err) {
       console.error(err);
@@ -107,7 +139,17 @@ export default function InteropLayer() {
     setBanner(null);
     try {
       const result = await acceptTransfer(documentId);
-      if (result.digest) setLastTx(result.digest);
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Interop Accept Transfer',
+          area: 'interop',
+          referenceId: documentId || undefined,
+          referenceLabel: 'Control Object ID',
+          details: 'Recipient accepted pending transfer',
+        });
+      }
       setBanner({ tone: 'ok', text: 'Transfer accepted. Control switched to the recipient.' });
     } catch (err) {
       console.error(err);
@@ -150,6 +192,25 @@ export default function InteropLayer() {
 
   return (
     <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Quick flow</h2>
+        <p className="section-subtitle mt-1">Minimal handshake: register, initiate by current controller, accept by recipient controller.</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Register envelope</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Anchor hash and mint control object. Save generated document ID.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Initiate transfer</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Use recipient wallet address and a transfer-proof hash from the transfer payload.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Accept transfer</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Recipient signs acceptance to switch control on the same object.</p>
+          </div>
+        </div>
+      </section>
+
       {!INTEROP_REGISTRY_ID && (
         <div className="rounded-xl border border-[#f2c2c2] bg-[#fff0f0] p-3 text-sm text-[#9f2d2d]">
           `VITE_INTEROP_REGISTRY_ID` is not configured. Deploy contracts again and set this value in frontend `.env`.
@@ -218,6 +279,7 @@ export default function InteropLayer() {
           </div>
           <div>
             <label className="field-label">Transfer proof hash</label>
+            <p className="mb-1 text-xs text-[#5f7389]">Use a hash of transfer payload/receipt (not the original document hash).</p>
             <input className="field-input font-mono text-xs" placeholder="proof hash / envelope hash v2" value={proofHash} onChange={(e) => setProofHash(e.target.value)} />
           </div>
         </div>

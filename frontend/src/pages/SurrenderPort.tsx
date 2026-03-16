@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useCurrentAccount } from '@iota/dapp-kit';
-import { useSurrender, useAccomplish } from '../hooks/useEBL';
-import { explorerTxUrl } from '../config/constants';
+import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
+import { parseEBLFields, useSurrender, useAccomplish } from '../hooks/useEBL';
+import { explorerTxUrl, STATUS_LABELS } from '../config/constants';
+import { recordTx } from '../utils/txHistory';
 
 type Banner = {
   tone: 'ok' | 'error';
@@ -10,6 +11,7 @@ type Banner = {
 
 export default function SurrenderPort() {
   const account = useCurrentAccount();
+  const client = useIotaClient();
   const { surrender, isPending: surrenderPending } = useSurrender();
   const { accomplish, isPending: accomplishPending } = useAccomplish();
 
@@ -17,12 +19,61 @@ export default function SurrenderPort() {
   const [lastTx, setLastTx] = useState('');
   const [message, setMessage] = useState<Banner | null>(null);
 
+  const loadEblForValidation = async (id: string) => {
+    const obj = await client.getObject({
+      id,
+      options: { showContent: true, showType: true },
+    });
+    if (obj.data?.content?.dataType !== 'moveObject') {
+      throw new Error('Object not found or not a Move object');
+    }
+    if (!obj.data.type?.includes('::ebl::ElectronicBL')) {
+      throw new Error('Provided object is not an eBL');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return parseEBLFields((obj.data.content as any).fields);
+  };
+
   const handleSurrender = async () => {
     setMessage(null);
     try {
+      if (!account?.address) {
+        setMessage({ tone: 'error', text: 'Connect wallet first.' });
+        return;
+      }
+
+      const ebl = await loadEblForValidation(eblId);
+      const connected = account.address.toLowerCase();
+      const holder = (ebl.current_holder || '').toLowerCase();
+
+      if (connected !== holder) {
+        setMessage({
+          tone: 'error',
+          text: `Surrender blocked: connected wallet is not current holder. Current holder is ${ebl.current_holder}.`,
+        });
+        return;
+      }
+
+      const status = Number(ebl.status || 0);
+      if (status === 3 || status === 4) {
+        setMessage({
+          tone: 'error',
+          text: `Surrender blocked: eBL status is already ${STATUS_LABELS[status] || ebl.status}.`,
+        });
+        return;
+      }
+
       const result = await surrender(eblId);
       if (result.digest) {
         setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Surrender eBL',
+          area: 'surrender',
+          referenceId: eblId || undefined,
+          referenceLabel: 'eBL ID',
+          details: 'Signed by current holder (consignee)',
+        });
       }
       setMessage({ tone: 'ok', text: 'eBL surrendered successfully. Carrier can now confirm cargo release.' });
     } catch (err) {
@@ -34,9 +85,42 @@ export default function SurrenderPort() {
   const handleAccomplish = async () => {
     setMessage(null);
     try {
+      if (!account?.address) {
+        setMessage({ tone: 'error', text: 'Connect wallet first.' });
+        return;
+      }
+
+      const ebl = await loadEblForValidation(eblId);
+      const connected = account.address.toLowerCase();
+      const carrier = (ebl.carrier || '').toLowerCase();
+      const status = Number(ebl.status || 0);
+
+      if (connected !== carrier) {
+        setMessage({
+          tone: 'error',
+          text: `Accomplish blocked: connected wallet is not carrier. Carrier is ${ebl.carrier}.`,
+        });
+        return;
+      }
+      if (status !== 3) {
+        setMessage({
+          tone: 'error',
+          text: `Accomplish blocked: current status is ${STATUS_LABELS[status] || ebl.status}. Required status is Surrendered.`,
+        });
+        return;
+      }
+
       const result = await accomplish(eblId);
       if (result.digest) {
         setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Accomplish eBL',
+          area: 'surrender',
+          referenceId: eblId || undefined,
+          referenceLabel: 'eBL ID',
+          details: 'Release confirmed by carrier',
+        });
       }
       setMessage({ tone: 'ok', text: 'Goods release confirmed. eBL status is now accomplished.' });
     } catch (err) {
@@ -56,6 +140,25 @@ export default function SurrenderPort() {
 
   return (
     <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Quick flow</h2>
+        <p className="section-subtitle mt-1">This page is role-sensitive: consignee first, carrier second.</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Same eBL ID</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Use the exact same object ID for surrender and accomplish steps.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Consignee wallet</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Sign `Surrender` with the current holder/consignee account.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Carrier wallet</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Switch wallet and sign `Accomplish` to close lifecycle.</p>
+          </div>
+        </div>
+      </section>
+
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Surrender and cargo release</h2>
         <p className="section-subtitle mt-1">Use the same eBL object ID for both operations, signed by the correct role.</p>

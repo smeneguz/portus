@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
-import { useRegisterCarrier, useIssueEBL } from '../hooks/useEBL';
-import { useRegisterInRegistry } from '../hooks/useCarrier';
+import { useCurrentAccount, useIotaClient, useSignAndExecuteTransaction } from '@iota/dapp-kit';
+import { Transaction } from '@iota/iota-sdk/transactions';
+import { useIssueEBL } from '../hooks/useEBL';
 import { computeSHA256 } from '../hooks/useNotarization';
-import { explorerTxUrl, PACKAGE_ID } from '../config/constants';
+import { CARRIER_REGISTRY_ID, CLOCK_ID, explorerTxUrl, PACKAGE_ID } from '../config/constants';
+import { recordTx } from '../utils/txHistory';
 
 type Notice = {
   tone: 'ok' | 'error';
@@ -13,8 +14,7 @@ type Notice = {
 export default function CarrierDashboard() {
   const account = useCurrentAccount();
   const client = useIotaClient();
-  const { registerCarrier, isPending: regPending } = useRegisterCarrier();
-  const { register: regInRegistry, isPending: regRegPending } = useRegisterInRegistry();
+  const { mutateAsync: signAndExecute, isPending: registerPending } = useSignAndExecuteTransaction();
   const { issueEBL, isPending: issuePending } = useIssueEBL();
 
   const [carrierName, setCarrierName] = useState('Portus Shipping');
@@ -90,9 +90,30 @@ export default function CarrierDashboard() {
   const handleRegister = async () => {
     setNotice(null);
     try {
-      await regInRegistry(carrierName, scacCode, country);
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::carrier_registry::register`,
+        arguments: [
+          tx.object(CARRIER_REGISTRY_ID),
+          tx.pure.string(carrierName),
+          tx.pure.string(scacCode),
+          tx.pure.string(country),
+          tx.object(CLOCK_ID),
+        ],
+      });
+      tx.moveCall({
+        target: `${PACKAGE_ID}::ebl::register_carrier`,
+        arguments: [
+          tx.pure.string(carrierName),
+          tx.object(CLOCK_ID),
+        ],
+      });
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = (await registerCarrier(carrierName)) as any;
+      const result = (await signAndExecute({
+        transaction: tx,
+        options: { showEffects: true, showObjectChanges: true, showEvents: true },
+      })) as any;
       const digest = result.digest as string | undefined;
 
       let capId = extractCarrierCapId(
@@ -132,7 +153,17 @@ export default function CarrierDashboard() {
       }
 
       if (capId) setCarrierCapId(capId);
-      if (result.digest) setLastTx(result.digest as string);
+      if (result.digest) {
+        setLastTx(result.digest as string);
+        recordTx({
+          digest: result.digest as string,
+          action: 'Register Carrier',
+          area: 'carrier',
+          referenceId: capId || scacCode || undefined,
+          referenceLabel: capId ? 'CarrierCap ID' : 'SCAC',
+          details: `${carrierName} (${country}) · profile + capability created`,
+        });
+      }
       setNotice({
         tone: capId ? 'ok' : 'error',
         text: capId
@@ -176,7 +207,17 @@ export default function CarrierDashboard() {
         freightTerms,
         contentHash,
       });
-      if (result.digest) setLastTx(result.digest);
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Issue eBL',
+          area: 'carrier',
+          referenceId: blNumber || undefined,
+          referenceLabel: 'BL Number',
+          details: `${portOfLoading || 'Unknown'} -> ${portOfDischarge || 'Unknown'}`,
+        });
+      }
       setNotice({ tone: 'ok', text: 'eBL issued successfully and anchored on-chain.' });
     } catch (err) {
       console.error('Issue failed:', err);
@@ -195,6 +236,25 @@ export default function CarrierDashboard() {
 
   return (
     <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Quick flow</h2>
+        <p className="section-subtitle mt-1">Run these steps in order to avoid common setup issues.</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Register carrier</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Submit carrier profile and mint `CarrierCap` with the same wallet.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Prepare eBL payload</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Fill shipment fields, shipper/consignee addresses, and content hash.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Issue and verify</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Issue eBL, then track digest from History or open explorer link below.</p>
+          </div>
+        </div>
+      </section>
+
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Carrier onboarding</h2>
         <p className="section-subtitle mt-1">Register your legal carrier profile and mint a `CarrierCap` to issue Bills of Lading.</p>
@@ -215,10 +275,10 @@ export default function CarrierDashboard() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button onClick={handleRegister} disabled={regPending || regRegPending} className="btn-main">
-            {regPending || regRegPending ? 'Registering...' : 'Register Carrier'}
+          <button onClick={handleRegister} disabled={registerPending} className="btn-main">
+            {registerPending ? 'Registering...' : 'Register Carrier'}
           </button>
-          <p className="text-xs text-[#5f7389]">Action signs two transactions: registry profile + carrier capability.</p>
+          <p className="text-xs text-[#5f7389]">Single wallet signature: profile registration + carrier capability in one atomic tx.</p>
         </div>
 
         <div className="mt-4 rounded-xl border border-[#d6e1ef] bg-[#f4f8ff] p-3">

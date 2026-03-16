@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCurrentAccount } from '@iota/dapp-kit';
 import { useEndorseAndTransfer, useCreateChain } from '../hooks/useEndorsement';
 import { explorerTxUrl, ENDORSEMENT_TYPES } from '../config/constants';
+import { recordTx } from '../utils/txHistory';
 
 type StatusMessage = {
   kind: 'ok' | 'error';
@@ -35,7 +36,17 @@ export default function TransferEndorse() {
       if (chainObj?.objectId) {
         setChainId(chainObj.objectId);
       }
-      if (result.digest) setLastTx(result.digest as string);
+      if (result.digest) {
+        setLastTx(result.digest as string);
+        recordTx({
+          digest: result.digest as string,
+          action: 'Create Endorsement Chain',
+          area: 'transfer',
+          referenceId: chainObj?.objectId || newChainBlId || undefined,
+          referenceLabel: chainObj?.objectId ? 'Chain ID' : 'eBL ID',
+          details: `Initial holder ${initialHolder || 'n/a'}`,
+        });
+      }
       setMessage({ kind: 'ok', text: 'Endorsement chain created successfully.' });
     } catch (err) {
       console.error('Create chain failed:', err);
@@ -47,7 +58,17 @@ export default function TransferEndorse() {
     setMessage(null);
     try {
       const result = await endorseAndTransfer(chainId, eblId, recipientAddress, endorsementType, note || 'Endorsement');
-      if (result.digest) setLastTx(result.digest);
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Endorse & Transfer',
+          area: 'transfer',
+          referenceId: eblId || undefined,
+          referenceLabel: 'eBL ID',
+          details: `${ENDORSEMENT_TYPES[endorsementType] || 'Transfer'} -> ${recipientAddress}${note ? ` (${note})` : ''}`,
+        });
+      }
       setMessage({ kind: 'ok', text: 'Endorsement and transfer submitted on-chain.' });
     } catch (err) {
       console.error('Transfer failed:', err);
@@ -66,6 +87,25 @@ export default function TransferEndorse() {
 
   return (
     <div className="space-y-6">
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Quick flow</h2>
+        <p className="section-subtitle mt-1">Use one chain per eBL and reuse that chain for each transfer.</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Create chain</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Initialize once with eBL ID and initial holder address.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Transfer title</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Submit recipient address + endorsement type from current holder wallet.</p>
+          </div>
+          <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Audit trail</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Check history timeline to see tx digests and on-chain endorsement events.</p>
+          </div>
+        </div>
+      </section>
+
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Create endorsement chain</h2>
         <p className="section-subtitle mt-1">Run once for each eBL before the first transfer in the chain of title.</p>

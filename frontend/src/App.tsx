@@ -7,13 +7,15 @@ import TransferEndorse from './pages/TransferEndorse';
 import SurrenderPort from './pages/SurrenderPort';
 import VerifyAntiFraud from './pages/VerifyAntiFraud';
 import InteropLayer from './pages/InteropLayer';
+import History from './pages/History';
 
 const NAV_ITEMS = [
-  { path: '/carrier', label: 'Carrier Desk', subtitle: 'Issue and register eBL', step: '01' },
-  { path: '/transfer', label: 'Transfer Hub', subtitle: 'Endorse and hand over title', step: '02' },
-  { path: '/surrender', label: 'Port Release', subtitle: 'Surrender and accomplish cargo', step: '03' },
-  { path: '/verify', label: 'Anti-Fraud', subtitle: 'Validate notarized document hash', step: '04' },
-  { path: '/interop', label: 'Interop Layer', subtitle: 'Universal control settlement flow', step: '05' },
+  { path: '/carrier', label: 'Carrier Desk', subtitle: 'Register carrier and issue eBL', badge: 'A' },
+  { path: '/transfer', label: 'Transfer Hub', subtitle: 'Create chain and transfer title', badge: 'B' },
+  { path: '/surrender', label: 'Port Release', subtitle: 'Surrender and accomplish cargo', badge: 'C' },
+  { path: '/verify', label: 'Anti-Fraud', subtitle: 'Verify object + document hash', badge: 'D' },
+  { path: '/interop', label: 'Interop Layer', subtitle: 'Cross-platform control handshake', badge: 'E' },
+  { path: '/history', label: 'History', subtitle: 'Unified tx and on-chain events', badge: 'H' },
 ];
 
 function pageMeta(pathname: string) {
@@ -91,7 +93,7 @@ export default function App() {
               >
                 <div className="flex items-start gap-3">
                   <span className="inline-flex min-w-[2.2rem] justify-center rounded-lg bg-[#0e4fbf] px-2 py-1 text-xs font-bold tracking-wide text-white">
-                    {item.step}
+                    {item.badge}
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-[#143e74]">{item.label}</p>
@@ -125,6 +127,7 @@ export default function App() {
               <Route path="/surrender" element={<SurrenderPort />} />
               <Route path="/verify" element={<VerifyAntiFraud />} />
               <Route path="/interop" element={<InteropLayer />} />
+              <Route path="/history" element={<History />} />
             </Routes>
           </section>
         </div>
