@@ -7,7 +7,7 @@ This guide explains how to deploy Portus, configure the frontend and use every p
 You need four things before opening the app:
 
 - IOTA CLI installed locally
-- Node.js 20+
+- Node.js 24+ recommended
 - the browser wallet extension connected to IOTA testnet
 - testnet funds on the wallets you want to use in the demo
 
@@ -222,17 +222,16 @@ Fields:
 
 - `Envelope/document hash`: SHA-256 of the eBL envelope or the document package you want to anchor
 - `Document type`: free text, default is `EBL_ENVELOPE`
-- `Source platform`: logical source platform label
+- `Source platform ID`: logical source platform label plus numeric ID
 - `Controller DID`: DID representing the current controller
 - `Controller party code`: interoperable party identifier for the current controller
-- `Verifiable Credential JSON`: VC payload whose hash will be bound on-chain
+- `Verifiable Credential JSON or JWT`: VC payload whose hash will be bound on-chain
 
-Important note on the current MVP:
+Identity verification modes:
 
-- the app validates the VC JSON structure locally
-- the app computes a deterministic SHA-256 hash of that VC JSON
-- the contract stores that hash on-chain as identity evidence
-- this is hash binding, not full cryptographic VC verification yet
+- if you paste a signed VC JWT, the app verifies it with `IOTA Identity WASM` before hashing and submitting it
+- if you paste a plain VC JSON object, the app validates its structure and hashes it deterministically as fallback
+- in both cases, the on-chain contract stores only the identity evidence hash
 
 ### How to fill the identity fields
 
@@ -241,7 +240,7 @@ If you are using the demo defaults, the app can generate them for you.
 - `Controller DID`: usually `did:iota:testnet:platform-X:<wallet-address-without-0x>`
 - `Controller party code`: usually `PLAT-X-<last-6-address-chars>`
 
-You can press `Load sample VC` to generate a valid sample VC JSON that matches the current DID and party code.
+You can press `Generate signed VC` to create a real signed VC JWT through `IOTA Identity`. That is the fastest path for the demo.
 
 ## 12. Interop: initiate transfer
 
@@ -253,11 +252,11 @@ Fields:
 - `Recipient controller address`: the IOTA address of the next controller, usually `Wallet B`
 - `Recipient DID`: DID of the next controller
 - `Recipient party code`: party identifier of the next controller
-- `Recipient platform`: logical destination platform
+- `Recipient platform ID`: logical destination platform label plus numeric ID
 - `Transfer proof hash`: hash of the transfer receipt, envelope delta or another proof package for the handover
 - `Transfer nonce`: unique nonce for this transfer attempt
 - `Expiry window`: how long the pending transfer remains valid
-- `Recipient Verifiable Presentation JSON`: VP payload expected from the recipient
+- `Recipient Verifiable Presentation JSON or JWT`: VP payload expected from the recipient
 - `Cancellation / rejection reason`: text stored on-chain if the controller later cancels the pending transfer
 
 ### Very important: transfer proof hash is not the original document hash
@@ -272,7 +271,7 @@ Good examples:
 
 For a quick demo you can also use any unique placeholder hash, but conceptually it is a handover proof, not the base document fingerprint.
 
-You can press `Load sample VP` to generate a sample presentation for the recipient DID and party code.
+You can press `Generate signed VP` to create a real signed VP JWT through `IOTA Identity`. In the initiate flow, the app may also replace the recipient DID with a generated `did:jwk` so the VP can be verified cryptographically later.
 
 ## 13. Interop: accept transfer
 
@@ -282,7 +281,7 @@ Fields:
 
 - `Recipient DID`: must match the pending DID stored on-chain
 - `Recipient party code`: must match the pending party code stored on-chain
-- `Recipient VP JSON`: must hash to the same expected identity hash stored during `Initiate Transfer`
+- `Recipient VP JSON or JWT`: must hash to the same expected identity hash stored during `Initiate Transfer`
 
 The contract checks:
 
@@ -292,6 +291,11 @@ The contract checks:
 - provided VP hash equals `pending_identity_hash`
 
 If all values match, control moves to the new controller and the pending fields are reset.
+
+Important practical note:
+
+- if you want to use `Generate signed VP` in the accept step, the pending recipient DID should already be the `did:jwk` generated during the initiate step
+- if the pending DID is a custom string that was typed manually, you should paste your own VP evidence instead of generating a new sample at accept time
 
 ## 14. Interop: cancel transfer
 
@@ -309,8 +313,10 @@ Important fields:
 
 - `Controller`: current active controller wallet
 - `Current DID`: current active DID
+- `Source platform`: original source platform with explicit numeric ID
 - `Current party code`: current active interoperable identifier
 - `Pending controller`: next wallet expected to accept the transfer
+- `Pending platform`: next platform with explicit numeric ID
 - `Pending DID`: next DID expected to accept the transfer
 - `Pending party code`: next party code expected to accept the transfer
 - `Transfer nonce`: nonce for the current pending handover

@@ -17,14 +17,14 @@ import {
   useRegisterInteropDocument,
 } from '../hooks/useInterop';
 import {
-  buildSampleCredentialJson,
-  buildSamplePresentationJson,
   defaultInteropDid,
   defaultPartyCode,
   formatExpiryTimestamp,
+  generateSignedCredentialJwt,
+  generateSignedPresentationJwt,
   generateTransferNonce,
-  validateCredentialJson,
-  validatePresentationJson,
+  validateCredentialInput,
+  validatePresentationInput,
 } from '../utils/interopIdentity';
 import { recordTx } from '../utils/txHistory';
 
@@ -103,22 +103,55 @@ export default function InteropLayer() {
     setBanner({ tone: 'ok', text: `Envelope hash generated from ${file.name}` });
   };
 
-  const handleLoadCredentialSample = () => {
-    setCredentialJson(buildSampleCredentialJson(controllerDid, controllerPartyCode, 'carrier'));
+  const platformLabel = (platformId: number) => `${INTEROP_PLATFORM_LABELS[platformId] || `Platform ${platformId}`} (ID ${platformId})`;
+
+  const handleLoadCredentialSample = async () => {
+    setBanner(null);
+    try {
+      const sample = await generateSignedCredentialJwt(controllerDid, controllerPartyCode, 'carrier');
+      setCredentialJson(sample.jwt);
+      setBanner({ tone: 'ok', text: `Signed VC JWT generated with IOTA Identity. Issuer DID: ${sample.issuerDid}` });
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to generate signed VC sample.' });
+    }
   };
 
-  const handleLoadRecipientPresentationSample = () => {
-    setPresentationJson(buildSamplePresentationJson(toControllerDid, toPartyCode, 'consignee'));
+  const handleLoadRecipientPresentationSample = async () => {
+    setBanner(null);
+    try {
+      const reusableDid = toControllerDid.startsWith('did:jwk:') ? toControllerDid : undefined;
+      const sample = await generateSignedPresentationJwt(toPartyCode, 'consignee', reusableDid);
+      setToControllerDid(sample.did);
+      setPresentationJson(sample.presentationJwt);
+      setBanner({ tone: 'ok', text: `Signed VP JWT generated with IOTA Identity. Recipient DID updated to ${sample.did}` });
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to generate signed VP sample.' });
+    }
   };
 
-  const handleLoadAcceptPresentationSample = () => {
-    setAcceptPresentationJson(buildSamplePresentationJson(acceptDid, acceptPartyCode, 'consignee'));
+  const handleLoadAcceptPresentationSample = async () => {
+    setBanner(null);
+    try {
+      if (acceptDid && !acceptDid.startsWith('did:jwk:')) {
+        throw new Error('Accept sample VP can only be generated for a did:jwk recipient DID. Use the DID created during initiate step or paste a manual VP.');
+      }
+      const reusableDid = acceptDid.startsWith('did:jwk:') ? acceptDid : undefined;
+      const sample = await generateSignedPresentationJwt(acceptPartyCode, 'consignee', reusableDid);
+      if (!acceptDid) setAcceptDid(sample.did);
+      setAcceptPresentationJson(sample.presentationJwt);
+      setBanner({ tone: 'ok', text: `Signed VP JWT generated for accept flow. Holder DID: ${sample.did}` });
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to generate signed accept VP sample.' });
+    }
   };
 
   const handleRegister = async () => {
     setBanner(null);
     try {
-      const credential = await validateCredentialJson(credentialJson, controllerDid, controllerPartyCode);
+      const credential = await validateCredentialInput(credentialJson, controllerDid, controllerPartyCode);
       const result = await registerDocument({
         documentHash,
         documentType,
@@ -151,20 +184,20 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: createdId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${documentType} · ${controllerDid} · ${controllerPartyCode}`,
+          details: `${documentType} · ${controllerPartyCode} · ${platformLabel(sourcePlatform)}`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Document registered with DID + VC hash metadata on the control registry.' });
+      setBanner({ tone: 'ok', text: `Document registered with DID + VC metadata on the control registry (${credential.mode === 'jwt-signature' ? 'IOTA Identity JWT verified' : 'structured VC validated'}).` });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Registration failed. Check DID, party code and VC JSON.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Registration failed. Check DID, party code and VC JSON/JWT.' });
     }
   };
 
   const handleInitiate = async () => {
     setBanner(null);
     try {
-      const presentation = await validatePresentationJson(presentationJson, toControllerDid, toPartyCode);
+      const presentation = await validatePresentationInput(presentationJson, toControllerDid, toPartyCode);
       const expiryMs = Date.now() + Number(expiryMinutes || 0) * 60_000;
       const result = await initiateTransfer({
         documentId,
@@ -185,20 +218,20 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: documentId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${toPartyCode} on ${INTEROP_PLATFORM_LABELS[toPlatform] || `Platform ${toPlatform}`} · nonce ${transferNonce}`,
+          details: `${toPartyCode} · ${platformLabel(sourcePlatform)} -> ${platformLabel(toPlatform)} · nonce ${transferNonce}`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Transfer initiated with PINT-lite metadata, DID target and expected VP hash.' });
+      setBanner({ tone: 'ok', text: `Transfer initiated with PINT-lite metadata and ${presentation.mode === 'jwt-signature' ? 'IOTA Identity JWT VP verification' : 'structured VP validation'}.` });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Initiate transfer failed. Ensure controller and VP metadata are valid.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Initiate transfer failed. Ensure controller and VP JSON/JWT metadata are valid.' });
     }
   };
 
   const handleAccept = async () => {
     setBanner(null);
     try {
-      const presentation = await validatePresentationJson(acceptPresentationJson, acceptDid, acceptPartyCode);
+      const presentation = await validatePresentationInput(acceptPresentationJson, acceptDid, acceptPartyCode);
       const result = await acceptTransfer({
         documentId,
         recipientDid: acceptDid,
@@ -213,13 +246,13 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: documentId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${acceptDid} accepted control`,
+          details: `${acceptPartyCode} accepted control on ${platformLabel(Number(lookupResult?.pending_platform || lookupResult?.current_platform || 0))}`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Transfer accepted. DID, party code and VP hash matched the pending transfer.' });
+      setBanner({ tone: 'ok', text: `Transfer accepted. DID, party code and VP evidence matched the pending transfer (${presentation.mode === 'jwt-signature' ? 'JWT signature verified' : 'structured VP validated'}).` });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Accept transfer failed. Wallet and VP data must match the pending metadata.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Accept transfer failed. Wallet and VP JSON/JWT data must match the pending metadata.' });
     }
   };
 
@@ -276,7 +309,7 @@ export default function InteropLayer() {
     return (
       <div className="surface p-10 text-center">
         <h2 className="section-title">Interoperability Layer</h2>
-        <p className="section-subtitle mt-2">Connect wallet to use decentralized control tracking, DID metadata and PINT-lite settlement flow.</p>
+        <p className="section-subtitle mt-2">Connect wallet to use decentralized control tracking, DID metadata, signed VC/VP verification and PINT-lite settlement flow.</p>
       </div>
     );
   }
@@ -285,15 +318,15 @@ export default function InteropLayer() {
     <div className="space-y-6">
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Quick flow</h2>
-        <p className="section-subtitle mt-1">Register envelope + controller DID, initiate with recipient DID/party code/VP hash, accept with matching VP evidence.</p>
+        <p className="section-subtitle mt-1">Register envelope + controller DID, initiate with recipient DID/party code/VP hash, accept with matching signed or structured VP evidence.</p>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Register identity metadata</p>
-            <p className="mt-1 text-sm text-[#4f657d]">Anchor envelope hash, controller DID, party code and VC hash in the same control object.</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Anchor envelope hash, controller DID, party code and VC evidence hash in the same control object.</p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Initiate PINT-lite transfer</p>
-            <p className="mt-1 text-sm text-[#4f657d]">Set recipient platform, DID, party code, VP hash, nonce and expiry before handover.</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Set source and destination platform IDs, DID, party code, VP hash, nonce and expiry before handover.</p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Accept with identity proof</p>
@@ -311,7 +344,7 @@ export default function InteropLayer() {
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Register document control token</h2>
         <p className="section-subtitle mt-1">
-          Register the eBL envelope hash and bind the initial controller with DID, party code and VC evidence hash.
+          Register the eBL envelope hash and bind the initial controller with DID, party code and VC evidence hash. The input accepts either structured VC JSON or a signed VC JWT.
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -327,11 +360,11 @@ export default function InteropLayer() {
           <div>
             <label className="field-label">Document type</label>
             <input className="field-input" value={documentType} onChange={(e) => setDocumentType(e.target.value)} />
-            <label className="field-label mt-2">Source platform</label>
+            <label className="field-label mt-2">Source platform ID</label>
             <select className="field-input" value={sourcePlatform} onChange={(e) => setSourcePlatform(Number(e.target.value))}>
-              <option value={1}>Platform A</option>
-              <option value={2}>Platform B</option>
-              <option value={3}>Platform C</option>
+              <option value={1}>Platform A (1)</option>
+              <option value={2}>Platform B (2)</option>
+              <option value={3}>Platform C (3)</option>
             </select>
           </div>
           <div>
@@ -346,14 +379,14 @@ export default function InteropLayer() {
 
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
-            <label className="field-label !mb-0">Verifiable Credential JSON</label>
+            <label className="field-label !mb-0">Verifiable Credential JSON or JWT</label>
             <button type="button" onClick={handleLoadCredentialSample} className="btn-alt">
-              Load sample VC
+              Generate signed VC
             </button>
           </div>
           <textarea
             className="field-input mt-2 min-h-[180px] font-mono text-xs"
-            placeholder='Paste a VC JSON with type "VerifiableCredential" and credentialSubject { id, partyCode, role }.'
+            placeholder='Paste either a VC JSON object or a signed VC JWT. Sample button generates a JWT signed with IOTA Identity.'
             value={credentialJson}
             onChange={(e) => setCredentialJson(e.target.value)}
           />
@@ -372,7 +405,7 @@ export default function InteropLayer() {
 
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Initiate transfer with PINT-lite metadata</h2>
-        <p className="section-subtitle mt-1">Store pending recipient identity, VP hash, transfer nonce, expiry and proof hash in the same shared control object.</p>
+        <p className="section-subtitle mt-1">Store source/destination platform IDs, pending recipient identity, VP hash, transfer nonce, expiry and proof hash in the same shared control object.</p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
@@ -392,11 +425,11 @@ export default function InteropLayer() {
             <input className="field-input" placeholder="PLAT-2-XYZ789" value={toPartyCode} onChange={(e) => setToPartyCode(e.target.value)} />
           </div>
           <div>
-            <label className="field-label">Recipient platform</label>
+            <label className="field-label">Recipient platform ID</label>
             <select className="field-input" value={toPlatform} onChange={(e) => setToPlatform(Number(e.target.value))}>
-              <option value={1}>Platform A</option>
-              <option value={2}>Platform B</option>
-              <option value={3}>Platform C</option>
+              <option value={1}>Platform A (1)</option>
+              <option value={2}>Platform B (2)</option>
+              <option value={3}>Platform C (3)</option>
             </select>
           </div>
           <div>
@@ -420,14 +453,14 @@ export default function InteropLayer() {
 
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
-            <label className="field-label !mb-0">Recipient Verifiable Presentation JSON</label>
+            <label className="field-label !mb-0">Recipient Verifiable Presentation JSON or JWT</label>
             <button type="button" onClick={handleLoadRecipientPresentationSample} className="btn-alt">
-              Load sample VP
+              Generate signed VP
             </button>
           </div>
           <textarea
             className="field-input mt-2 min-h-[200px] font-mono text-xs"
-            placeholder='Paste a VP JSON with holder + embedded VC matching the recipient DID and party code.'
+            placeholder='Paste either a VP JSON object or a signed VP JWT. Sample button generates a JWT VP signed with IOTA Identity.'
             value={presentationJson}
             onChange={(e) => setPresentationJson(e.target.value)}
           />
@@ -457,7 +490,7 @@ export default function InteropLayer() {
 
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Accept transfer with VP verification</h2>
-        <p className="section-subtitle mt-1">Recipient must submit a VP bundle whose DID, party code and hash match the pending metadata stored on-chain.</p>
+        <p className="section-subtitle mt-1">Recipient must submit a VP bundle whose DID, party code and hash match the pending metadata stored on-chain. Signed JWT VP is supported through IOTA Identity.</p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
@@ -472,9 +505,9 @@ export default function InteropLayer() {
 
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
-            <label className="field-label !mb-0">Recipient VP JSON</label>
+            <label className="field-label !mb-0">Recipient VP JSON or JWT</label>
             <button type="button" onClick={handleLoadAcceptPresentationSample} className="btn-alt">
-              Load sample VP
+              Generate signed VP
             </button>
           </div>
           <textarea
@@ -512,7 +545,11 @@ export default function InteropLayer() {
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Current platform</p>
-              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{INTEROP_PLATFORM_LABELS[Number(lookupResult.current_platform)] ?? lookupResult.current_platform}</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{platformLabel(Number(lookupResult.current_platform))}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Source platform</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{platformLabel(Number(lookupResult.source_platform))}</p>
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Current DID</p>
@@ -529,6 +566,10 @@ export default function InteropLayer() {
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending controller</p>
               <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.pending_controller || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending platform</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{platformLabel(Number(lookupResult.pending_platform))}</p>
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending DID</p>

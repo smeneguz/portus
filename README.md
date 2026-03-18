@@ -36,9 +36,9 @@ The web app exposes those flows through `Carrier Desk`, `Transfer Hub`, `Port Re
 
 The interoperability flow is the main differentiator of the project.
 
-When a document is registered in `interop_control`, Portus stores the envelope hash together with the active controller wallet, controller DID, party code and an identity bundle hash derived from the provided Verifiable Credential JSON. When a transfer is initiated, the contract records the pending recipient wallet, recipient DID, recipient party code, recipient platform, transfer proof hash, transfer nonce and expiry timestamp. The recipient can only accept if the wallet, DID, party code and presentation hash match the pending values.
+When a document is registered in `interop_control`, Portus stores the envelope hash together with the active controller wallet, controller DID, party code and an identity bundle hash derived from the provided credential evidence. When a transfer is initiated, the contract records the pending recipient wallet, recipient DID, recipient party code, recipient platform, transfer proof hash, transfer nonce and expiry timestamp. The recipient can only accept if the wallet, DID, party code and presentation hash match the pending values.
 
-This is a deliberate **MVP**. The current app validates VC and VP JSON structure client-side and binds their deterministic SHA-256 hash on-chain. It does **not** yet perform full cryptographic verification with the IOTA Identity SDK. That is the correct next step for production hardening, but the current version is already enough to demonstrate how identity metadata and interoperable control can be coupled in one settlement flow.
+The frontend now supports two identity evidence modes. The strongest path is a signed VC/VP JWT flow backed by **IOTA Identity WASM**, where the sample buttons generate real `did:jwk` credentials and presentations and the app verifies their signatures before submitting the transaction. The fallback path still accepts structured VC/VP JSON and binds its deterministic SHA-256 hash on-chain, which keeps the MVP usable even without a full external issuer setup.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ This is a deliberate **MVP**. The current app validates VC and VP JSON structure
 ### Prerequisites
 
 - IOTA CLI installed and configured
-- Node.js 20+
+- Node.js 24+ recommended
 - an IOTA-compatible browser wallet
 - testnet funds for the wallets used in the demo
 

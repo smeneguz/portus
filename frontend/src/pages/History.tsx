@@ -107,7 +107,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${p.to_party_code || shortAddr(p.to)} · nonce ${p.transfer_nonce || "—"}`,
+      details: `${p.to_party_code || shortAddr(p.to)} -> ${formatPlatform(p.to_platform)} · nonce ${p.transfer_nonce || "—"}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -118,7 +118,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${p.to_party_code || shortAddr(p.to)} accepted`,
+      details: `${p.to_party_code || shortAddr(p.to)} accepted on ${formatPlatform(p.new_platform)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -165,7 +165,8 @@ function isCopyableReference(label: string, value: string): boolean {
 
 function formatPlatform(platform: unknown): string {
   const code = Number(platform ?? 0);
-  return INTEROP_PLATFORM_LABELS[code] ?? `Platform ${code || "?"}`;
+  const label = INTEROP_PLATFORM_LABELS[code] ?? `Platform ${code || "?"}`;
+  return `${label} [${code || "?"}]`;
 }
 
 function normalizeTimestamp(value: unknown): number {
