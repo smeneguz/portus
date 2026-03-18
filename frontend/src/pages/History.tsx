@@ -96,7 +96,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `controller ${shortAddr(p.controller)} from ${formatPlatform(p.source_platform)}`,
+      details: `${p.controller_party_code || shortAddr(p.controller)} on ${formatPlatform(p.source_platform)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -107,7 +107,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${shortAddr(p.from)} -> ${shortAddr(p.to)}`,
+      details: `${p.to_party_code || shortAddr(p.to)} · nonce ${p.transfer_nonce || "—"}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -118,7 +118,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${shortAddr(p.from)} -> ${shortAddr(p.to)}`,
+      details: `${p.to_party_code || shortAddr(p.to)} accepted`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -129,7 +129,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `controller ${shortAddr(p.controller)}`,
+      details: p.reason || `controller ${shortAddr(p.controller)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -256,6 +256,12 @@ function inferLocalMeta(entry: TxHistoryEntry): {
   }
   if (entry.action === "Accomplish eBL") {
     return { referenceLabel: "eBL ID", details: "Cargo release completed" };
+  }
+  if (entry.action === "Interop Cancel Transfer") {
+    return {
+      referenceLabel: "Control Object ID",
+      details: "Pending interop transfer cancelled",
+    };
   }
   if (entry.action.includes("Interop")) {
     return {

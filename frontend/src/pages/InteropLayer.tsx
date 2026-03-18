@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
 import {
   INTEROP_PLATFORM_LABELS,
@@ -12,9 +12,20 @@ import {
   parseInteropDocumentFields,
   type InteropDocumentData,
   useAcceptInteropTransfer,
+  useCancelInteropTransfer,
   useInitiateInteropTransfer,
   useRegisterInteropDocument,
 } from '../hooks/useInterop';
+import {
+  buildSampleCredentialJson,
+  buildSamplePresentationJson,
+  defaultInteropDid,
+  defaultPartyCode,
+  formatExpiryTimestamp,
+  generateTransferNonce,
+  validateCredentialJson,
+  validatePresentationJson,
+} from '../utils/interopIdentity';
 import { recordTx } from '../utils/txHistory';
 
 type Banner = {
@@ -28,15 +39,29 @@ export default function InteropLayer() {
   const { registerDocument, isPending: registerPending } = useRegisterInteropDocument();
   const { initiateTransfer, isPending: initiatePending } = useInitiateInteropTransfer();
   const { acceptTransfer, isPending: acceptPending } = useAcceptInteropTransfer();
+  const { cancelTransfer, isPending: cancelPending } = useCancelInteropTransfer();
 
   const [documentHash, setDocumentHash] = useState('');
   const [documentType, setDocumentType] = useState('EBL_ENVELOPE');
   const [sourcePlatform, setSourcePlatform] = useState(1);
+  const [controllerDid, setControllerDid] = useState('');
+  const [controllerPartyCode, setControllerPartyCode] = useState('');
+  const [credentialJson, setCredentialJson] = useState('');
 
   const [documentId, setDocumentId] = useState('');
   const [toController, setToController] = useState('');
+  const [toControllerDid, setToControllerDid] = useState('');
+  const [toPartyCode, setToPartyCode] = useState('');
   const [toPlatform, setToPlatform] = useState(2);
   const [proofHash, setProofHash] = useState('');
+  const [transferNonce, setTransferNonce] = useState(generateTransferNonce());
+  const [expiryMinutes, setExpiryMinutes] = useState('30');
+  const [presentationJson, setPresentationJson] = useState('');
+  const [cancelReason, setCancelReason] = useState('Receiver validation failed');
+
+  const [acceptDid, setAcceptDid] = useState('');
+  const [acceptPartyCode, setAcceptPartyCode] = useState('');
+  const [acceptPresentationJson, setAcceptPresentationJson] = useState('');
 
   const [lookupId, setLookupId] = useState('');
   const [lookupResult, setLookupResult] = useState<InteropDocumentData | null>(null);
@@ -44,6 +69,18 @@ export default function InteropLayer() {
 
   const [lastTx, setLastTx] = useState('');
   const [banner, setBanner] = useState<Banner | null>(null);
+
+  useEffect(() => {
+    if (!account?.address) return;
+    setControllerDid((current) => current || defaultInteropDid(account.address, sourcePlatform));
+    setControllerPartyCode((current) => current || defaultPartyCode(sourcePlatform, account.address));
+  }, [account?.address, sourcePlatform]);
+
+  useEffect(() => {
+    if (!lookupResult) return;
+    setAcceptDid((current) => current || lookupResult.pending_controller_did || lookupResult.controller_did);
+    setAcceptPartyCode((current) => current || lookupResult.pending_party_code || lookupResult.controller_party_code);
+  }, [lookupResult]);
 
   const readCreatedControlId = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,13 +103,29 @@ export default function InteropLayer() {
     setBanner({ tone: 'ok', text: `Envelope hash generated from ${file.name}` });
   };
 
+  const handleLoadCredentialSample = () => {
+    setCredentialJson(buildSampleCredentialJson(controllerDid, controllerPartyCode, 'carrier'));
+  };
+
+  const handleLoadRecipientPresentationSample = () => {
+    setPresentationJson(buildSamplePresentationJson(toControllerDid, toPartyCode, 'consignee'));
+  };
+
+  const handleLoadAcceptPresentationSample = () => {
+    setAcceptPresentationJson(buildSamplePresentationJson(acceptDid, acceptPartyCode, 'consignee'));
+  };
+
   const handleRegister = async () => {
     setBanner(null);
     try {
+      const credential = await validateCredentialJson(credentialJson, controllerDid, controllerPartyCode);
       const result = await registerDocument({
         documentHash,
         documentType,
         sourcePlatform,
+        controllerDid,
+        controllerPartyCode,
+        controllerIdentityHash: credential.hash,
       });
       let createdId = readCreatedControlId(result);
       if (!createdId && result.digest) {
@@ -98,24 +151,31 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: createdId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${documentType} from ${INTEROP_PLATFORM_LABELS[sourcePlatform] || `Platform ${sourcePlatform}`}`,
+          details: `${documentType} · ${controllerDid} · ${controllerPartyCode}`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Document envelope registered on decentralized control registry.' });
+      setBanner({ tone: 'ok', text: 'Document registered with DID + VC hash metadata on the control registry.' });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: 'Registration failed. Check registry ID, hash and wallet permissions.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Registration failed. Check DID, party code and VC JSON.' });
     }
   };
 
   const handleInitiate = async () => {
     setBanner(null);
     try {
+      const presentation = await validatePresentationJson(presentationJson, toControllerDid, toPartyCode);
+      const expiryMs = Date.now() + Number(expiryMinutes || 0) * 60_000;
       const result = await initiateTransfer({
         documentId,
         toController,
+        toControllerDid,
+        toPartyCode,
         toPlatform,
         proofHash,
+        expectedIdentityHash: presentation.hash,
+        transferNonce,
+        expiryMs,
       });
       if (result.digest) {
         setLastTx(result.digest);
@@ -125,20 +185,26 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: documentId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `To ${toController} on ${INTEROP_PLATFORM_LABELS[toPlatform] || `Platform ${toPlatform}`}`,
+          details: `${toPartyCode} on ${INTEROP_PLATFORM_LABELS[toPlatform] || `Platform ${toPlatform}`} · nonce ${transferNonce}`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Transfer initiated. Pending recipient acceptance.' });
+      setBanner({ tone: 'ok', text: 'Transfer initiated with PINT-lite metadata, DID target and expected VP hash.' });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: 'Initiate transfer failed. Ensure you are the current controller.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Initiate transfer failed. Ensure controller and VP metadata are valid.' });
     }
   };
 
   const handleAccept = async () => {
     setBanner(null);
     try {
-      const result = await acceptTransfer(documentId);
+      const presentation = await validatePresentationJson(acceptPresentationJson, acceptDid, acceptPartyCode);
+      const result = await acceptTransfer({
+        documentId,
+        recipientDid: acceptDid,
+        recipientPartyCode: acceptPartyCode,
+        identityHash: presentation.hash,
+      });
       if (result.digest) {
         setLastTx(result.digest);
         recordTx({
@@ -147,13 +213,38 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: documentId || undefined,
           referenceLabel: 'Control Object ID',
-          details: 'Recipient accepted pending transfer',
+          details: `${acceptDid} accepted control`,
         });
       }
-      setBanner({ tone: 'ok', text: 'Transfer accepted. Control switched to the recipient.' });
+      setBanner({ tone: 'ok', text: 'Transfer accepted. DID, party code and VP hash matched the pending transfer.' });
     } catch (err) {
       console.error(err);
-      setBanner({ tone: 'error', text: 'Accept transfer failed. Wallet must match pending controller.' });
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Accept transfer failed. Wallet and VP data must match the pending metadata.' });
+    }
+  };
+
+  const handleCancel = async () => {
+    setBanner(null);
+    try {
+      const result = await cancelTransfer({
+        documentId,
+        rejectionReason: cancelReason,
+      });
+      if (result.digest) {
+        setLastTx(result.digest);
+        recordTx({
+          digest: result.digest,
+          action: 'Interop Cancel Transfer',
+          area: 'interop',
+          referenceId: documentId || undefined,
+          referenceLabel: 'Control Object ID',
+          details: cancelReason,
+        });
+      }
+      setBanner({ tone: 'ok', text: 'Pending transfer cancelled and rejection reason stored on-chain.' });
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: 'Cancel transfer failed. Current controller must sign this action.' });
     }
   };
 
@@ -185,7 +276,7 @@ export default function InteropLayer() {
     return (
       <div className="surface p-10 text-center">
         <h2 className="section-title">Interoperability Layer</h2>
-        <p className="section-subtitle mt-2">Connect wallet to use decentralized control tracking and settlement flow.</p>
+        <p className="section-subtitle mt-2">Connect wallet to use decentralized control tracking, DID metadata and PINT-lite settlement flow.</p>
       </div>
     );
   }
@@ -194,19 +285,19 @@ export default function InteropLayer() {
     <div className="space-y-6">
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Quick flow</h2>
-        <p className="section-subtitle mt-1">Minimal handshake: register, initiate by current controller, accept by recipient controller.</p>
+        <p className="section-subtitle mt-1">Register envelope + controller DID, initiate with recipient DID/party code/VP hash, accept with matching VP evidence.</p>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Register envelope</p>
-            <p className="mt-1 text-sm text-[#4f657d]">Anchor hash and mint control object. Save generated document ID.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">1. Register identity metadata</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Anchor envelope hash, controller DID, party code and VC hash in the same control object.</p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Initiate transfer</p>
-            <p className="mt-1 text-sm text-[#4f657d]">Use recipient wallet address and a transfer-proof hash from the transfer payload.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">2. Initiate PINT-lite transfer</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Set recipient platform, DID, party code, VP hash, nonce and expiry before handover.</p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Accept transfer</p>
-            <p className="mt-1 text-sm text-[#4f657d]">Recipient signs acceptance to switch control on the same object.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#3d5e81]">3. Accept with identity proof</p>
+            <p className="mt-1 text-sm text-[#4f657d]">Recipient wallet must match pending controller and present the expected VP bundle hash.</p>
           </div>
         </div>
       </section>
@@ -220,7 +311,7 @@ export default function InteropLayer() {
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Register document control token</h2>
         <p className="section-subtitle mt-1">
-          This is the universal settlement/control layer: register hash, bind controller, and make the document interoperable by design.
+          Register the eBL envelope hash and bind the initial controller with DID, party code and VC evidence hash.
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -243,12 +334,35 @@ export default function InteropLayer() {
               <option value={3}>Platform C</option>
             </select>
           </div>
+          <div>
+            <label className="field-label">Controller DID</label>
+            <input className="field-input" placeholder="did:iota:testnet:platform-1:..." value={controllerDid} onChange={(e) => setControllerDid(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Controller party code</label>
+            <input className="field-input" placeholder="PLAT-1-ABC123" value={controllerPartyCode} onChange={(e) => setControllerPartyCode(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <label className="field-label !mb-0">Verifiable Credential JSON</label>
+            <button type="button" onClick={handleLoadCredentialSample} className="btn-alt">
+              Load sample VC
+            </button>
+          </div>
+          <textarea
+            className="field-input mt-2 min-h-[180px] font-mono text-xs"
+            placeholder='Paste a VC JSON with type "VerifiableCredential" and credentialSubject { id, partyCode, role }.'
+            value={credentialJson}
+            onChange={(e) => setCredentialJson(e.target.value)}
+          />
         </div>
 
         <div className="mt-4">
           <button
             onClick={handleRegister}
-            disabled={registerPending || !documentHash || !documentType || !INTEROP_REGISTRY_ID}
+            disabled={registerPending || !documentHash || !documentType || !controllerDid || !controllerPartyCode || !credentialJson || !INTEROP_REGISTRY_ID}
             className="btn-main"
           >
             {registerPending ? 'Registering...' : 'Register Document'}
@@ -257,8 +371,8 @@ export default function InteropLayer() {
       </section>
 
       <section className="surface p-5 md:p-6">
-        <h2 className="section-title">Transfer control across platforms</h2>
-        <p className="section-subtitle mt-1">Two-phase handshake: initiate by current controller, accept by recipient controller.</p>
+        <h2 className="section-title">Initiate transfer with PINT-lite metadata</h2>
+        <p className="section-subtitle mt-1">Store pending recipient identity, VP hash, transfer nonce, expiry and proof hash in the same shared control object.</p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
@@ -270,6 +384,14 @@ export default function InteropLayer() {
             <input className="field-input font-mono text-xs" placeholder="0x..." value={toController} onChange={(e) => setToController(e.target.value)} />
           </div>
           <div>
+            <label className="field-label">Recipient DID</label>
+            <input className="field-input" placeholder="did:iota:testnet:platform-2:..." value={toControllerDid} onChange={(e) => setToControllerDid(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Recipient party code</label>
+            <input className="field-input" placeholder="PLAT-2-XYZ789" value={toPartyCode} onChange={(e) => setToPartyCode(e.target.value)} />
+          </div>
+          <div>
             <label className="field-label">Recipient platform</label>
             <select className="field-input" value={toPlatform} onChange={(e) => setToPlatform(Number(e.target.value))}>
               <option value={1}>Platform A</option>
@@ -279,16 +401,91 @@ export default function InteropLayer() {
           </div>
           <div>
             <label className="field-label">Transfer proof hash</label>
-            <p className="mb-1 text-xs text-[#5f7389]">Use a hash of transfer payload/receipt (not the original document hash).</p>
-            <input className="field-input font-mono text-xs" placeholder="proof hash / envelope hash v2" value={proofHash} onChange={(e) => setProofHash(e.target.value)} />
+            <input className="field-input font-mono text-xs" placeholder="hash of transfer receipt / envelope delta" value={proofHash} onChange={(e) => setProofHash(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Transfer nonce</label>
+            <div className="flex gap-2">
+              <input className="field-input font-mono text-xs" value={transferNonce} onChange={(e) => setTransferNonce(e.target.value)} />
+              <button type="button" onClick={() => setTransferNonce(generateTransferNonce())} className="btn-alt">
+                Regen
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="field-label">Expiry window (minutes)</label>
+            <input className="field-input" type="number" min="1" value={expiryMinutes} onChange={(e) => setExpiryMinutes(e.target.value)} />
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button onClick={handleInitiate} disabled={initiatePending || !documentId || !toController || !proofHash || !INTEROP_REGISTRY_ID} className="btn-main">
+        <div className="mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <label className="field-label !mb-0">Recipient Verifiable Presentation JSON</label>
+            <button type="button" onClick={handleLoadRecipientPresentationSample} className="btn-alt">
+              Load sample VP
+            </button>
+          </div>
+          <textarea
+            className="field-input mt-2 min-h-[200px] font-mono text-xs"
+            placeholder='Paste a VP JSON with holder + embedded VC matching the recipient DID and party code.'
+            value={presentationJson}
+            onChange={(e) => setPresentationJson(e.target.value)}
+          />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto_auto]">
+          <div>
+            <label className="field-label">Cancellation / rejection reason</label>
+            <input className="field-input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          </div>
+          <button
+            onClick={handleInitiate}
+            disabled={initiatePending || !documentId || !toController || !toControllerDid || !toPartyCode || !proofHash || !presentationJson || !INTEROP_REGISTRY_ID}
+            className="btn-main self-end"
+          >
             {initiatePending ? 'Initiating...' : 'Initiate Transfer'}
           </button>
-          <button onClick={handleAccept} disabled={acceptPending || !documentId || !INTEROP_REGISTRY_ID} className="btn-success">
+          <button
+            onClick={handleCancel}
+            disabled={cancelPending || !documentId || !cancelReason || !INTEROP_REGISTRY_ID}
+            className="btn-alt self-end"
+          >
+            {cancelPending ? 'Cancelling...' : 'Cancel Transfer'}
+          </button>
+        </div>
+      </section>
+
+      <section className="surface p-5 md:p-6">
+        <h2 className="section-title">Accept transfer with VP verification</h2>
+        <p className="section-subtitle mt-1">Recipient must submit a VP bundle whose DID, party code and hash match the pending metadata stored on-chain.</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="field-label">Recipient DID</label>
+            <input className="field-input" value={acceptDid} onChange={(e) => setAcceptDid(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Recipient party code</label>
+            <input className="field-input" value={acceptPartyCode} onChange={(e) => setAcceptPartyCode(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <label className="field-label !mb-0">Recipient VP JSON</label>
+            <button type="button" onClick={handleLoadAcceptPresentationSample} className="btn-alt">
+              Load sample VP
+            </button>
+          </div>
+          <textarea
+            className="field-input mt-2 min-h-[200px] font-mono text-xs"
+            value={acceptPresentationJson}
+            onChange={(e) => setAcceptPresentationJson(e.target.value)}
+          />
+        </div>
+
+        <div className="mt-4">
+          <button onClick={handleAccept} disabled={acceptPending || !documentId || !acceptDid || !acceptPartyCode || !acceptPresentationJson || !INTEROP_REGISTRY_ID} className="btn-success">
             {acceptPending ? 'Accepting...' : 'Accept Transfer'}
           </button>
         </div>
@@ -318,8 +515,40 @@ export default function InteropLayer() {
               <p className="mt-1 text-sm font-semibold text-[#173a5a]">{INTEROP_PLATFORM_LABELS[Number(lookupResult.current_platform)] ?? lookupResult.current_platform}</p>
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Current DID</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.controller_did || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Current party code</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{lookupResult.controller_party_code || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Current identity hash</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.controller_identity_hash || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending controller</p>
-              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.pending_controller}</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.pending_controller || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending DID</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.pending_controller_did || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending party code</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{lookupResult.pending_party_code || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending identity hash</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.pending_identity_hash || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Transfer nonce</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.transfer_nonce || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending expiry</p>
+              <p className="mt-1 text-sm font-semibold text-[#173a5a]">{formatExpiryTimestamp(lookupResult.pending_transfer_expiry_ms)}</p>
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3 md:col-span-2">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Document hash</p>
@@ -328,6 +557,10 @@ export default function InteropLayer() {
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3 md:col-span-2">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Last transfer proof hash</p>
               <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.last_transfer_proof_hash || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3 md:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Last rejection reason</p>
+              <p className="mt-1 text-sm text-[#20415f]">{lookupResult.last_rejection_reason || '—'}</p>
             </div>
             <a href={explorerObjectUrl(lookupId)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#0e4fbf] underline">
               Open object in IOTA Explorer

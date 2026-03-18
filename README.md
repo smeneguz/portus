@@ -3,67 +3,85 @@
 </p>
 
 <h1 align="center">Portus</h1>
-<p align="center"><em>"Bills of Lading, finally digital."</em></p>
+<p align="center"><em>Interoperable control and notarization for electronic Bills of Lading on IOTA.</em></p>
 
 <p align="center">
-  Electronic Bill of Lading protocol on <strong>IOTA Move</strong>.<br/>
-  Carrier issues, shipper endorses, bank endorses, consignee surrenders at port.<br/>
-  Includes an interoperability control layer for cross-platform trade document settlement.
+  Portus is an IOTA Move prototype for the eBL lifecycle, title transfer, anti-fraud verification and cross-platform control handover.<br/>
+  The core idea is not to build another closed eBL silo, but to show how IOTA can act as a neutral control and settlement layer for trade documents.
 </p>
 
 ---
 
-## Problem
+## Why this project exists
 
-The paper Bill of Lading passes through 20-30 hands per shipment, arrives after the goods, and costs the maritime industry ~$4 billion/year in fraud. UNCITRAL MLETR is adopted; the legal framework is ready. The infrastructure is not.
+The eBL market is moving, but it is still fragmented. Platforms can digitize the document, yet cross-platform handover, auditability and neutral proof of control remain hard. Portus addresses that gap by combining an on-chain eBL workflow with an interoperability layer that stores document envelope hashes, controller metadata and transfer state in a shared IOTA object model.
 
-## Solution
+The project is intentionally positioned around **control**, not abstract ownership claims. For interoperable trade documents, what matters is who currently controls the record, who is allowed to receive it next, what proof bundle was expected, and whether the handover was completed or rejected. That is the problem Portus models on-chain.
 
-**Portus** makes the BoL a **Move object on IOTA**. Ownership transfers on-chain with sub-second finality. The content hash is notarised at creation -- any alteration is instantly detectable. A forged BoL cannot match the on-chain hash; a stolen BoL cannot transfer without the owner's key.
+## Why IOTA adds value
+
+IOTA is a strong fit here because the trade-document flow is stateful, high-volume and audit-heavy. Portus uses Move objects to represent the eBL, endorsement chain and interop control token as explicit state machines. This makes the workflow easier to reason about than a loose collection of hashes, and it keeps the control trail visible from issuance to surrender.
+
+IOTA also gives the project a pragmatic path toward low-friction settlement infrastructure: notarized data, shared objects, wallet-based signatures and a clean way to extend the MVP toward sponsored transactions and stronger identity verification later.
+
+## What Portus implements today
+
+Portus currently ships five Move modules and seven frontend pages.
+
+The on-chain layer covers the native eBL lifecycle (`ebl`), endorsement-driven transfer (`endorsement`), document hash anchoring (`notarization`), carrier registration (`carrier_registry`) and an interoperability control registry (`interop_control`).
+
+The web app exposes those flows through `Carrier Desk`, `Transfer Hub`, `Port Release`, `Anti-Fraud`, `Interop Layer`, `History` and the `eBL Viewer`.
+
+## Interop layer: DID/VC + PINT-lite metadata
+
+The interoperability flow is the main differentiator of the project.
+
+When a document is registered in `interop_control`, Portus stores the envelope hash together with the active controller wallet, controller DID, party code and an identity bundle hash derived from the provided Verifiable Credential JSON. When a transfer is initiated, the contract records the pending recipient wallet, recipient DID, recipient party code, recipient platform, transfer proof hash, transfer nonce and expiry timestamp. The recipient can only accept if the wallet, DID, party code and presentation hash match the pending values.
+
+This is a deliberate **MVP**. The current app validates VC and VP JSON structure client-side and binds their deterministic SHA-256 hash on-chain. It does **not** yet perform full cryptographic verification with the IOTA Identity SDK. That is the correct next step for production hardening, but the current version is already enough to demonstrate how identity metadata and interoperable control can be coupled in one settlement flow.
 
 ## Architecture
 
+```text
++-------------------------------------------------------------------+
+|                           IOTA Move                               |
++---------------+---------------+---------------+-------------------+
+| ebl           | endorsement   | notarization  | carrier_registry  |
++---------------+---------------+---------------+-------------------+
+|                    interop_control (PINT-lite)                    |
++-------------------------------------------------------------------+
+|                     React + TypeScript + dApp Kit                 |
++-------------------------------------------------------------------+
 ```
-+--------------------------------------------------+
-|              IOTA Move Contracts                  |
-+----------+----------+------------+----------------+----------------+
-|  ebl     | endorse  | notarize   | carrier_reg    | interop_ctrl   |
-|          | ment     |            |                |                |
-+----------+----------+------------+----------------+----------------+
-|           React + @iota/dapp-kit                  |
-+--------------------------------------------------+
-```
 
-**5 Move modules** -- `ebl` (lifecycle), `endorsement` (chain of title), `notarization` (hash anchoring), `carrier_registry` (identity), `interop_control` (decentralized control tracking / settlement).
+## Smart contracts
 
-**6 frontend pages** -- Carrier Dashboard, eBL Viewer, Transfer/Endorse, Surrender/Accomplish, Verify/Anti-Fraud, Interop Layer.
+| Module | Purpose | Main functions |
+| --- | --- | --- |
+| `ebl` | eBL lifecycle and port-release state | `register_carrier`, `issue_ebl`, `update_status`, `surrender`, `accomplish` |
+| `endorsement` | Title transfer and endorsement trail | `create_chain`, `endorse_and_transfer` |
+| `notarization` | Hash anchoring and integrity checks | `notarize`, `verify`, `batch_notarize` |
+| `carrier_registry` | Carrier profile metadata | `register`, `increment_bls` |
+| `interop_control` | Cross-platform control tracking and settlement | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
 
-## Deployed (testnet)
+## Local setup
 
-| Object | ID |
-|--------|----|
-| Package | from `scripts/deploy.sh` output |
-| BLRegistry | from `scripts/deploy.sh` output |
-| CarrierRegistry | from `scripts/deploy.sh` output |
-| InteropRegistry | from `scripts/deploy.sh` output |
+### Prerequisites
 
-## Prerequisites
+- IOTA CLI installed and configured
+- Node.js 20+
+- an IOTA-compatible browser wallet
+- testnet funds for the wallets used in the demo
 
-- IOTA CLI v1.2+ (`cargo install iota`)
-- Node.js v20+
-- An IOTA-compatible browser wallet (e.g. IOTA Wallet extension)
-
-## Quick start
-
-1. **Build and test contracts**
+### Build and test the contracts
 
 ```bash
 cd contracts
-iota move build
-iota move test
+ iota move build
+ iota move test
 ```
 
-2. **Deploy contracts** (optional, already deployed on testnet)
+### Deploy to testnet
 
 ```bash
 cd scripts
@@ -71,7 +89,18 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-3. **Start the frontend**
+The script prints the values you need for the frontend configuration:
+
+```env
+VITE_NETWORK=testnet
+VITE_PACKAGE_ID=0x...
+VITE_BL_REGISTRY_ID=0x...
+VITE_CARRIER_REGISTRY_ID=0x...
+VITE_INTEROP_REGISTRY_ID=0x...
+VITE_RPC_URL=https://api.testnet.iota.cafe:443
+```
+
+### Run the frontend
 
 ```bash
 cd frontend
@@ -79,103 +108,43 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and connect your IOTA wallet.
+Open `http://localhost:5173` and connect your wallet.
 
-4. **Run E2E tests** (requires funded testnet keypairs)
+## Verification status
 
-```bash
-cd scripts
-npm install
-export CARRIER_PRIVKEY="iotaprivkey1qq..."
-export SHIPPER_PRIVKEY="iotaprivkey1qq..."
-export BANK_PRIVKEY="iotaprivkey1qq..."
-export CONSIGNEE_PRIVKEY="iotaprivkey1qq..."
-npx tsx e2e-test.ts
-```
+The current codebase has:
 
-## Smart contracts
+- frontend production build passing with `npm run build`
+- Move unit tests passing with `iota move test` (`20/20`)
+- an end-to-end script in `scripts/e2e-test.ts` for funded testnet wallets
 
-| Module | Description | Key functions |
-|--------|-------------|---------------|
-| `ebl` | eBL lifecycle | `register_carrier`, `issue_ebl`, `update_status`, `surrender`, `accomplish` |
-| `endorsement` | Chain of title transfers | `create_chain`, `endorse_and_transfer` |
-| `notarization` | Document hash anchoring | `notarize`, `verify`, `batch_notarize` |
-| `carrier_registry` | Carrier identity | `register`, `increment_bls` |
-| `interop_control` | Universal control-settlement layer for trade docs | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
+## Suggested demo narrative
 
-## Testing
+The strongest live flow is not “we built an eBL app”. It is: issue an eBL, notarize its content, transfer title through endorsements, then show a separate cross-platform control handover through the interop object with DID-bound metadata and a two-step handshake. That makes Portus look like a neutral control and audit layer rather than another isolated document platform.
 
-**Move unit tests** -- 18 tests, 18 passed
+## Documentation
 
-Covers: registry init, carrier registration, eBL issuance, status updates, endorsement chain (shipper to bank to consignee), surrender + accomplish, anti-fraud hash verification, batch notarization, interoperability control-token registration, initiate/accept transfer handshake, unauthorized status update rejection, unauthorized surrender rejection, unauthorized endorsement rejection.
-
-**E2E integration tests** -- 11 tests, 11 passed (0.0221 IOTA gas)
-
-```
-PASS  Register Carrier
-PASS  Issue eBL
-PASS  Notarise Document
-PASS  Create Endorsement Chain
-PASS  Endorsement shipper to bank
-PASS  Endorsement bank to consignee
-PASS  Status Update (arrived)
-PASS  Surrender
-PASS  Accomplish
-PASS  Anti-Fraud Check
-PASS  Unauthorised Transfer (correctly rejected)
-```
+- See `Tutorial.md` for the step-by-step operator guide.
+- See `scripts/deploy.sh` for the deployment flow.
 
 ## Project structure
 
-```
+```text
 portus/
   contracts/
-    Move.toml
     sources/
-      ebl.move
-      endorsement.move
-      notarization.move
-      carrier_registry.move
-      interop_control.move
     tests/
-      ebl_tests.move
-      endorsement_tests.move
-      notarization_tests.move
-      carrier_registry_tests.move
-      interop_control_tests.move
   frontend/
-    public/
-      favicon.svg
-      logo.svg
     src/
-      main.tsx
-      App.tsx
+      components/
       config/
       hooks/
-      components/
       pages/
-    index.html
-    package.json
-    tsconfig.json
-    vite.config.ts
-    vercel.json
-    .env.example
+      utils/
   scripts/
-    deploy.sh
-    e2e-test.ts
-    seed-demo.ts
-    package.json
   README.md
-  .gitignore
+  Tutorial.md
 ```
-
-## Tech stack
-
-- **Blockchain**: IOTA Move (testnet)
-- **Smart contracts**: Move 2024.beta
-- **Frontend**: React 19, Vite 7, TypeScript, Tailwind CSS v4
-- **Wallet**: @iota/dapp-kit
-- **Testing**: `iota move test` (unit), `tsx` E2E scripts (integration)
 
 ## Licence
 
