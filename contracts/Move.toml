@@ -6,4 +6,5 @@ edition = "2024.beta"
 Iota = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "testnet", override = true }
 
 [addresses]
+iota = "0x2"
 portus = "0x0"

@@ -63,7 +63,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "eBL ID",
     buildDetails: (p) => ({
       reference: p.bl_id || "",
-      details: `${shortAddr(p.from)} -> ${shortAddr(p.to)}`,
+      details: `Title transferred from ${shortAddr(p.from)} to ${shortAddr(p.to)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -74,7 +74,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "eBL ID",
     buildDetails: (p) => ({
       reference: p.bl_id || "",
-      details: `by ${shortAddr(p.surrendered_by)}`,
+      details: `Surrender requested by ${shortAddr(p.surrendered_by)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -96,7 +96,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${p.controller_party_code || shortAddr(p.controller)} on ${formatPlatform(p.source_platform)}`,
+      details: `Control registered for ${p.controller_party_code || shortAddr(p.controller)} on ${formatPlatform(p.source_platform)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -107,7 +107,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${p.to_party_code || shortAddr(p.to)} -> ${formatPlatform(p.to_platform)} · nonce ${p.transfer_nonce || "—"}`,
+      details: `Pending transfer to ${p.to_party_code || shortAddr(p.to)} on ${formatPlatform(p.to_platform)} (nonce ${p.transfer_nonce || "—"})`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -118,7 +118,7 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: `${p.to_party_code || shortAddr(p.to)} accepted on ${formatPlatform(p.new_platform)}`,
+      details: `Transfer accepted by ${p.to_party_code || shortAddr(p.to)} on ${formatPlatform(p.new_platform)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
@@ -129,7 +129,9 @@ const EVENT_QUERIES: EventQueryConfig[] = [
     referenceLabel: "Control Object ID",
     buildDetails: (p) => ({
       reference: p.document_id || "",
-      details: p.reason || `controller ${shortAddr(p.controller)}`,
+      details:
+        p.reason ||
+        `Cancelled by current controller ${shortAddr(p.controller)}`,
       timestamp: Number(p.timestamp || 0),
     }),
   },
