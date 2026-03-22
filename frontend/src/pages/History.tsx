@@ -8,8 +8,10 @@ import {
   explorerTxUrl,
 } from "../config/constants";
 import {
-  clearTxHistory,
+  clearHistoryView,
   getTxHistory,
+  getHistoryClearCutoff,
+  resetHistoryClearCutoff,
   type TxHistoryEntry,
 } from "../utils/txHistory";
 
@@ -300,6 +302,7 @@ export default function History() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [copiedKey, setCopiedKey] = useState("");
   const [error, setError] = useState("");
+  const [clearCutoff, setClearCutoff] = useState(getHistoryClearCutoff());
 
   const loadHistory = async () => {
     setLoading(true);
@@ -423,17 +426,26 @@ export default function History() {
       (a, b) => b.timestamp - a.timestamp,
     );
   }, [allRows]);
+
+  const visibleRows = useMemo(
+    () =>
+      groupedRows.filter((row) =>
+        clearCutoff ? row.timestamp >= clearCutoff : true,
+      ),
+    [groupedRows, clearCutoff],
+  );
+
   const actionOptions = useMemo(
     () =>
-      Array.from(new Set(groupedRows.map((row) => row.action))).sort((a, b) =>
+      Array.from(new Set(visibleRows.map((row) => row.action))).sort((a, b) =>
         a.localeCompare(b),
       ),
-    [groupedRows],
+    [visibleRows],
   );
 
   const rows = useMemo(() => {
     const cutoff = timeCutoff(timeFilter);
-    let filtered = groupedRows;
+    let filtered = visibleRows;
     if (areaFilter !== "all") {
       filtered = filtered.filter((row) => row.area === areaFilter);
     }
@@ -455,7 +467,7 @@ export default function History() {
         row.digest.toLowerCase().includes(q) ||
         row.details.toLowerCase().includes(q),
     );
-  }, [groupedRows, search, areaFilter, actionFilter, timeFilter]);
+  }, [visibleRows, search, areaFilter, actionFilter, timeFilter]);
 
   const resetFilters = () => {
     setSearch("");
@@ -540,12 +552,25 @@ export default function History() {
           </button>
           <button
             onClick={() => {
-              clearTxHistory();
+              const cutoff = clearHistoryView();
+              setClearCutoff(cutoff);
               setLocalRows([]);
+              setChainRows((current) =>
+                current.filter((row) => row.timestamp >= cutoff),
+              );
             }}
             className="btn-alt"
           >
-            Clear App History
+            Clear Local History
+          </button>
+          <button
+            onClick={() => {
+              resetHistoryClearCutoff();
+              setClearCutoff(0);
+            }}
+            className="btn-alt"
+          >
+            Show Full Chain History
           </button>
           <button onClick={resetFilters} className="btn-alt">
             Reset Filters
@@ -564,7 +589,7 @@ export default function History() {
               Showing
             </p>
             <p className="mt-1 text-xl font-bold text-[#173a5a]">
-              {rows.length} / {groupedRows.length}
+              {rows.length} / {visibleRows.length}
             </p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
