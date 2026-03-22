@@ -7,17 +7,12 @@ import {
   PACKAGE_ID,
   explorerTxUrl,
 } from "../config/constants";
-import {
-  clearHistoryView,
-  getTxHistory,
-  getHistoryClearCutoff,
-  resetHistoryClearCutoff,
-  type TxHistoryEntry,
-} from "../utils/txHistory";
+import { getTxHistory, type TxHistoryEntry } from "../utils/txHistory";
 
 type HistoryArea = "carrier" | "transfer" | "surrender" | "interop" | "other";
 type AreaFilter = "all" | HistoryArea;
 type TimeFilter = "all" | "24h" | "7d" | "30d";
+type RowLimit = 20 | 50 | 100;
 
 type RawHistoryRow = {
   timestamp: number;
@@ -300,9 +295,10 @@ export default function History() {
   const [areaFilter, setAreaFilter] = useState<AreaFilter>("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [rowLimit, setRowLimit] = useState<RowLimit>(20);
+  const [page, setPage] = useState(1);
   const [copiedKey, setCopiedKey] = useState("");
   const [error, setError] = useState("");
-  const [clearCutoff, setClearCutoff] = useState(getHistoryClearCutoff());
 
   const loadHistory = async () => {
     setLoading(true);
@@ -427,25 +423,17 @@ export default function History() {
     );
   }, [allRows]);
 
-  const visibleRows = useMemo(
-    () =>
-      groupedRows.filter((row) =>
-        clearCutoff ? row.timestamp >= clearCutoff : true,
-      ),
-    [groupedRows, clearCutoff],
-  );
-
   const actionOptions = useMemo(
     () =>
-      Array.from(new Set(visibleRows.map((row) => row.action))).sort((a, b) =>
+      Array.from(new Set(groupedRows.map((row) => row.action))).sort((a, b) =>
         a.localeCompare(b),
       ),
-    [visibleRows],
+    [groupedRows],
   );
 
-  const rows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const cutoff = timeCutoff(timeFilter);
-    let filtered = visibleRows;
+    let filtered = groupedRows;
     if (areaFilter !== "all") {
       filtered = filtered.filter((row) => row.area === areaFilter);
     }
@@ -467,13 +455,35 @@ export default function History() {
         row.digest.toLowerCase().includes(q) ||
         row.details.toLowerCase().includes(q),
     );
-  }, [visibleRows, search, areaFilter, actionFilter, timeFilter]);
+  }, [groupedRows, search, areaFilter, actionFilter, timeFilter]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredRows.length / rowLimit)),
+    [filteredRows.length, rowLimit],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, areaFilter, actionFilter, timeFilter, rowLimit]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const rows = useMemo(() => {
+    const start = (page - 1) * rowLimit;
+    return filteredRows.slice(start, start + rowLimit);
+  }, [filteredRows, page, rowLimit]);
 
   const resetFilters = () => {
     setSearch("");
     setAreaFilter("all");
     setActionFilter("all");
     setTimeFilter("all");
+    setRowLimit(20);
+    setPage(1);
   };
 
   const copyText = async (key: string, value: string) => {
@@ -550,28 +560,6 @@ export default function History() {
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
-          <button
-            onClick={() => {
-              const cutoff = clearHistoryView();
-              setClearCutoff(cutoff);
-              setLocalRows([]);
-              setChainRows((current) =>
-                current.filter((row) => row.timestamp >= cutoff),
-              );
-            }}
-            className="btn-alt"
-          >
-            Clear Local History
-          </button>
-          <button
-            onClick={() => {
-              resetHistoryClearCutoff();
-              setClearCutoff(0);
-            }}
-            className="btn-alt"
-          >
-            Show Full Chain History
-          </button>
           <button onClick={resetFilters} className="btn-alt">
             Reset Filters
           </button>
@@ -589,14 +577,17 @@ export default function History() {
               Showing
             </p>
             <p className="mt-1 text-xl font-bold text-[#173a5a]">
-              {rows.length} / {visibleRows.length}
+              {rows.length} / {filteredRows.length}
+            </p>
+            <p className="mt-1 text-xs text-[#60758c]">
+              Page {page} of {totalPages}
             </p>
           </div>
           <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
             <p className="text-xs uppercase tracking-wide text-[#60758c]">
               Latest activity
             </p>
-            <p className="mt-1 text-sm font-semibold text-[#173a5a]">
+            <p className="mt-1 text-xl font-bold text-[#173a5a] leading-tight">
               {latestTimestamp
                 ? new Date(latestTimestamp).toLocaleString()
                 : "—"}
@@ -731,6 +722,42 @@ export default function History() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex justify-end border-t border-[#ecf2f9] bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-[#60758c]">Rows</span>
+            <select
+              className="field-input h-9 min-w-[110px] py-1"
+              value={rowLimit}
+              onChange={(e) => setRowLimit(Number(e.target.value) as RowLimit)}
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <button
+              type="button"
+              className="btn-alt"
+              disabled={page <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Prev
+            </button>
+            <span className="min-w-[110px] text-center text-xs font-semibold text-[#60758c]">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn-alt"
+              disabled={page >= totalPages}
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+            >
+              Next
+            </button>
+          </div>
         </div>
       </section>
     </div>
