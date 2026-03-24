@@ -6,7 +6,8 @@ import LocalFilePreview from '../components/LocalFilePreview';
 import { explorerObjectUrl } from '../config/constants';
 import { parseEBLFields, type EBLData } from '../hooks/useEBL';
 import { computeSHA256 } from '../hooks/useNotarization';
-import { getVaultRecord, listVaultRecords, saveVaultRecord, type VaultRecord } from '../utils/documentVault';
+import { clearVault, getVaultRecord, listVaultRecords, saveVaultRecord, type VaultRecord } from '../utils/documentVault';
+import { findLinkedInteropControlForEbl, type LinkedInteropControl } from '../utils/interopLink';
 
 type Banner = {
   tone: 'ok' | 'error';
@@ -27,6 +28,7 @@ export default function Vault() {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [ebl, setEbl] = useState<EBLData | null>(null);
   const [vaultRecord, setVaultRecord] = useState<VaultRecord | null>(null);
+  const [linkedInterop, setLinkedInterop] = useState<LinkedInteropControl | null>(null);
   const [recentVaultRecords, setRecentVaultRecords] = useState<VaultRecord[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreviewUrl, setImportPreviewUrl] = useState('');
@@ -57,6 +59,7 @@ export default function Vault() {
       setLookupId(eblId);
       setEbl(parsed);
       setVaultRecord(getVaultRecord('ebl', eblId));
+      setLinkedInterop(await findLinkedInteropControlForEbl(client, eblId));
       setImportFile(null);
       setImportHash('');
       if (importPreviewUrl) {
@@ -67,6 +70,7 @@ export default function Vault() {
       console.error(err);
       setEbl(null);
       setVaultRecord(null);
+      setLinkedInterop(null);
       setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to load eBL object.' });
     } finally {
       setLookupLoading(false);
@@ -75,6 +79,13 @@ export default function Vault() {
 
   const handleLookup = async () => {
     await loadEbl(lookupId);
+  };
+
+  const handleClearVault = () => {
+    clearVault('ebl');
+    setRecentVaultRecords([]);
+    setVaultRecord(null);
+    setBanner({ tone: 'ok', text: 'Local eBL vault cleared for the current deployment scope.' });
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,8 +100,10 @@ export default function Vault() {
 
   const handleAttach = async () => {
     if (!account?.address || !lookupId || !ebl || !importFile) return;
-    if (!sameAddress(account.address, ebl.current_holder)) {
-      setBanner({ tone: 'error', text: 'Only the current holder can attach or recover a file for this eBL.' });
+    const isHolder = sameAddress(account.address, ebl.current_holder);
+    const isLinkedController = sameAddress(account.address, linkedInterop?.data.controller);
+    if (!isHolder && !isLinkedController) {
+      setBanner({ tone: 'error', text: 'Only the current holder or the linked interop controller can attach or recover a file for this eBL.' });
       return;
     }
     if (importHash !== ebl.content_hash) {
@@ -108,7 +121,7 @@ export default function Vault() {
         file: importFile,
         hash: importHash,
         createdBy: account.address,
-        initialOwner: ebl.current_holder,
+        initialOwner: isHolder ? ebl.current_holder : (linkedInterop?.data.controller || ebl.current_holder),
       });
       setVaultRecord(saved);
       refreshVault();
@@ -124,7 +137,7 @@ export default function Vault() {
   const canAttach = Boolean(
     account?.address &&
     ebl &&
-    sameAddress(account.address, ebl.current_holder) &&
+    (sameAddress(account.address, ebl.current_holder) || sameAddress(account.address, linkedInterop?.data.controller)) &&
     importFile &&
     importHash &&
     importHash === ebl.content_hash,
@@ -135,7 +148,7 @@ export default function Vault() {
       <section className="surface p-5 md:p-6">
         <h2 className="section-title">Document vault</h2>
         <p className="section-subtitle mt-1">
-          Recover locally stored shipment files by `eBL ID`, or reattach a file to an existing eBL when the connected wallet is the current holder.
+          Recover locally stored shipment files by `eBL ID`, or reattach a file to an existing eBL when the connected wallet is the current holder or the linked interop controller.
         </p>
 
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto]">
@@ -156,6 +169,9 @@ export default function Vault() {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" onClick={refreshVault} className="btn-alt">
             Refresh local vault
+          </button>
+          <button type="button" onClick={handleClearVault} className="btn-alt">
+            Clear vault
           </button>
           <p className="text-xs text-[#5f7389]">This vault is local to the current browser profile. It is not remote storage.</p>
         </div>
@@ -232,12 +248,18 @@ export default function Vault() {
                 <p className="text-xs uppercase tracking-wide text-[#60758c]">Content hash</p>
                 <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{ebl.content_hash || '—'}</p>
               </div>
+              {linkedInterop && (
+                <div className="rounded-xl border border-[#d7e2ef] bg-[#f8fbff] p-3 md:col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-[#60758c]">Linked interop controller</p>
+                  <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{linkedInterop.data.controller}</p>
+                </div>
+              )}
             </div>
           </section>
 
           <section className="surface p-5 md:p-6">
             <h2 className="section-title">Attached document access</h2>
-            <p className="section-subtitle mt-1">If the file already exists in this browser vault, you can open it here using the on-chain holder check.</p>
+            <p className="section-subtitle mt-1">If the file already exists in this browser vault, you can open it here using the on-chain holder check and any linked interop controller.</p>
             <div className="mt-4">
               <DocumentVaultCard
                 record={vaultRecord}
@@ -245,6 +267,8 @@ export default function Vault() {
                 connectedAddress={account?.address}
                 ownerLabel="Holder"
                 expectedHash={ebl.content_hash}
+                delegatedViewerLabel={linkedInterop ? 'Linked interop controller' : undefined}
+                delegatedViewerAddress={linkedInterop?.data.controller}
               />
             </div>
           </section>
@@ -253,12 +277,12 @@ export default function Vault() {
             <section className="surface p-5 md:p-6">
               <h2 className="section-title">Reattach local file</h2>
               <p className="section-subtitle mt-1">
-                If the file is not already in this browser, select it again. The app will attach it only when the connected wallet is the current holder and the hash matches the on-chain record.
+                If the file is not already in this browser, select it again. The app will attach it only when the connected wallet is the current holder or the linked interop controller, and the hash matches the on-chain record.
               </p>
 
-              {!sameAddress(account?.address, ebl.current_holder) && (
+              {!sameAddress(account?.address, ebl.current_holder) && !sameAddress(account?.address, linkedInterop?.data.controller) && (
                 <div className="mt-4 rounded-xl border border-[#f2c2c2] bg-[#fff7f7] p-4 text-sm text-[#9f2d2d]">
-                  Only the current holder wallet can reattach a file for this eBL.
+                  Only the current holder wallet or the linked interop controller can reattach a file for this eBL.
                 </div>
               )}
 

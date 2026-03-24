@@ -46,6 +46,7 @@ export default function InteropLayer() {
 
   const [documentHash, setDocumentHash] = useState('');
   const [documentType, setDocumentType] = useState('EBL_ENVELOPE');
+  const [linkedEblId, setLinkedEblId] = useState('');
   const [sourcePlatform, setSourcePlatform] = useState(1);
   const [controllerDid, setControllerDid] = useState('');
   const [controllerPartyCode, setControllerPartyCode] = useState('');
@@ -169,6 +170,7 @@ export default function InteropLayer() {
     try {
       const credential = await validateCredentialInput(credentialJson, controllerDid, controllerPartyCode);
       const result = await registerDocument({
+        linkedEblId: linkedEblId || '0x0000000000000000000000000000000000000000000000000000000000000000',
         documentHash,
         documentType,
         sourcePlatform,
@@ -217,7 +219,7 @@ export default function InteropLayer() {
           area: 'interop',
           referenceId: createdId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${documentType} · ${controllerPartyCode} · ${platformLabel(sourcePlatform)}`,
+          details: `${documentType} · ${controllerPartyCode} · ${platformLabel(sourcePlatform)}${linkedEblId ? ` · linked eBL ${linkedEblId}` : ''}`,
         });
       }
       setBanner({ tone: 'ok', text: `Document registered with DID + VC metadata on the control registry (${credential.mode === 'jwt-signature' ? 'IOTA Identity JWT verified' : 'structured VC validated'}).` });
@@ -445,6 +447,10 @@ export default function InteropLayer() {
           <div>
             <label className="field-label">Document type</label>
             <input className="field-input" value={documentType} onChange={(e) => setDocumentType(e.target.value)} />
+            <label className="field-label mt-2">Linked eBL object ID (optional)</label>
+            <input className="field-input font-mono text-xs" placeholder="0x..." value={linkedEblId} onChange={(e) => setLinkedEblId(e.target.value)} />
+          </div>
+          <div>
             <label className="field-label mt-2">Source platform ID</label>
             <select className="field-input" value={sourcePlatform} onChange={(e) => setSourcePlatform(Number(e.target.value))}>
               <option value={1}>Platform A (1)</option>
@@ -660,6 +666,10 @@ export default function InteropLayer() {
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Current identity hash</p>
               <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.controller_identity_hash || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Linked eBL object</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{lookupResult.linked_ebl_id || '—'}</p>
             </div>
             <div className="rounded-xl border border-[#d7e2ef] bg-white p-3">
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending controller</p>

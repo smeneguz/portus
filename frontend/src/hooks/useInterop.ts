@@ -3,6 +3,7 @@ import { Transaction } from '@iota/iota-sdk/transactions';
 import { CLOCK_ID, INTEROP_REGISTRY_ID, PACKAGE_ID } from '../config/constants';
 
 export interface InteropDocumentData {
+  linked_ebl_id: string;
   document_hash: string;
   document_type: string;
   source_platform: string;
@@ -29,6 +30,7 @@ export interface InteropDocumentData {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseInteropDocumentFields(fields: any): InteropDocumentData {
   return {
+    linked_ebl_id: fields.linked_ebl_id || '',
     document_hash: fields.document_hash || '',
     document_type: fields.document_type || '',
     source_platform: String(fields.source_platform ?? '0'),
@@ -57,6 +59,7 @@ export function useRegisterInteropDocument() {
   const { mutateAsync: signAndExecute, isPending } = useSignAndExecuteTransaction();
 
   const registerDocument = async (params: {
+    linkedEblId: string;
     documentHash: string;
     documentType: string;
     sourcePlatform: number;
@@ -73,6 +76,7 @@ export function useRegisterInteropDocument() {
       target: `${PACKAGE_ID}::interop_control::register_document`,
       arguments: [
         tx.object(INTEROP_REGISTRY_ID),
+        tx.pure.address(params.linkedEblId),
         tx.pure.string(params.documentHash),
         tx.pure.string(params.documentType),
         tx.pure.u8(params.sourcePlatform),

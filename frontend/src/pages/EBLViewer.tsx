@@ -10,6 +10,7 @@ import EndorsementTimeline from '../components/EndorsementTimeline';
 import DocumentVaultCard from '../components/DocumentVaultCard';
 import { explorerObjectUrl, PACKAGE_ID } from '../config/constants';
 import { getVaultRecord, type VaultRecord } from '../utils/documentVault';
+import { findLinkedInteropControlForEbl, type LinkedInteropControl } from '../utils/interopLink';
 
 export default function EBLViewer() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function EBLViewer() {
   const [endorsements, setEndorsements] = useState<EndorsementRecord[]>([]);
   const [currentHolder, setCurrentHolder] = useState('');
   const [vaultRecord, setVaultRecord] = useState<VaultRecord | null>(null);
+  const [linkedInterop, setLinkedInterop] = useState<LinkedInteropControl | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export default function EBLViewer() {
           setEbl(parseEBLFields(fields));
           setCurrentHolder(fields.current_holder || '');
           setVaultRecord(getVaultRecord('ebl', id));
+          setLinkedInterop(await findLinkedInteropControlForEbl(client, id));
         }
 
         // Try to find the endorsement chain for this eBL
@@ -118,8 +121,26 @@ export default function EBLViewer() {
           connectedAddress={account?.address}
           ownerLabel="Holder"
           expectedHash={ebl.content_hash}
+          delegatedViewerLabel={linkedInterop ? 'Linked interop controller' : undefined}
+          delegatedViewerAddress={linkedInterop?.data.controller}
         />
       </div>
+
+      {linkedInterop && (
+        <div className="surface p-5 md:p-6">
+          <h3 className="mb-4 font-bold text-[#123a61]">Linked interop control</h3>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-[#d7e2ef] bg-[#f8fbff] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Control object ID</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{linkedInterop.controlObjectId}</p>
+            </div>
+            <div className="rounded-xl border border-[#d7e2ef] bg-[#f8fbff] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Interop controller</p>
+              <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{linkedInterop.data.controller}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

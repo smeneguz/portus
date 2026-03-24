@@ -32,6 +32,7 @@ public struct InteropRegistry has key {
 /// A control token for a trade document envelope with PINT-lite transfer metadata.
 public struct TradeDocumentControl has key {
     id: UID,
+    linked_ebl_id: address,
     document_hash: String,
     document_type: String,
     source_platform: u8,
@@ -59,6 +60,7 @@ public struct TradeDocumentControl has key {
 
 public struct DocumentRegistered has copy, drop {
     document_id: address,
+    linked_ebl_id: address,
     controller: address,
     controller_did: String,
     controller_party_code: String,
@@ -111,6 +113,7 @@ fun init(ctx: &mut TxContext) {
 /// Register a document envelope hash and mint a control token.
 public fun register_document(
     registry: &mut InteropRegistry,
+    linked_ebl_id: address,
     document_hash: String,
     document_type: String,
     source_platform: u8,
@@ -127,6 +130,7 @@ public fun register_document(
 
     transfer::share_object(TradeDocumentControl {
         id: uid,
+        linked_ebl_id,
         document_hash,
         document_type,
         source_platform,
@@ -154,6 +158,7 @@ public fun register_document(
 
     event::emit(DocumentRegistered {
         document_id,
+        linked_ebl_id,
         controller,
         controller_did,
         controller_party_code,
@@ -295,6 +300,7 @@ public fun cancel_transfer(
 
 // === View / getter functions ===
 
+public fun linked_ebl_id(document: &TradeDocumentControl): address { document.linked_ebl_id }
 public fun document_hash(document: &TradeDocumentControl): String { document.document_hash }
 public fun document_type(document: &TradeDocumentControl): String { document.document_type }
 public fun source_platform(document: &TradeDocumentControl): u8 { document.source_platform }

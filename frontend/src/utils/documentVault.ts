@@ -1,3 +1,5 @@
+import { NETWORK, PACKAGE_ID } from '../config/constants';
+
 export type VaultAnchorType = 'ebl' | 'interop';
 
 export type VaultRecord = {
@@ -15,12 +17,14 @@ export type VaultRecord = {
   initialOwner: string;
 };
 
-const STORAGE_KEY = 'portus.document-vault.v1';
+function storageKey(): string {
+  return `portus.document-vault.v1.${NETWORK}.${PACKAGE_ID.toLowerCase()}`;
+}
 
 function readVault(): VaultRecord[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as VaultRecord[];
     return Array.isArray(parsed) ? parsed : [];
@@ -32,7 +36,7 @@ function readVault(): VaultRecord[] {
 
 function writeVault(records: VaultRecord[]): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  window.localStorage.setItem(storageKey(), JSON.stringify(records));
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -84,4 +88,14 @@ export function listVaultRecords(anchorType?: VaultAnchorType): VaultRecord[] {
   const records = readVault();
   if (!anchorType) return records;
   return records.filter((item) => item.anchorType === anchorType);
+}
+
+export function clearVault(anchorType?: VaultAnchorType): void {
+  if (typeof window === 'undefined') return;
+  if (!anchorType) {
+    window.localStorage.removeItem(storageKey());
+    return;
+  }
+  const filtered = readVault().filter((item) => item.anchorType !== anchorType);
+  writeVault(filtered);
 }

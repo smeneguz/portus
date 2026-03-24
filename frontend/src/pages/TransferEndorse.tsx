@@ -44,27 +44,85 @@ export default function TransferEndorse() {
     return created?.objectId || "";
   };
 
+  const readCreatedObjectIds = (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result: any,
+  ): string[] => {
+    const ids = new Set<string>();
+
+    const changes = (result?.objectChanges ?? []) as Array<{
+      objectId?: string;
+    }>;
+    changes.forEach((change) => {
+      if (change.objectId) ids.add(change.objectId);
+    });
+
+    const created = (result?.effects?.created ?? []) as Array<{
+      reference?: { objectId?: string };
+    }>;
+    created.forEach((entry) => {
+      const objectId = entry.reference?.objectId;
+      if (objectId) ids.add(objectId);
+    });
+
+    return [...ids];
+  };
+
+  const resolveChainId = async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result: any,
+    targetBlId: string,
+  ): Promise<string> => {
+    let createdChainId = readCreatedChainId(result);
+    if (createdChainId) return createdChainId;
+
+    const candidateIds = new Set<string>(readCreatedObjectIds(result));
+
+    if (result?.digest) {
+      try {
+        const tx = await client.getTransactionBlock({
+          digest: result.digest,
+          options: { showObjectChanges: true, showEffects: true },
+        });
+        createdChainId = readCreatedChainId(tx);
+        if (createdChainId) return createdChainId;
+        readCreatedObjectIds(tx).forEach((id) => candidateIds.add(id));
+      } catch (resolveErr) {
+        console.warn(
+          "Failed to fetch tx details for endorsement chain resolution:",
+          resolveErr,
+        );
+      }
+    }
+
+    for (const candidateId of candidateIds) {
+      try {
+        const obj = await client.getObject({
+          id: candidateId,
+          options: { showType: true, showContent: true },
+        });
+        if (obj.data?.content?.dataType !== "moveObject") continue;
+        const objectType = obj.data.type || "";
+        if (!objectType.includes("endorsement::EndorsementChain")) continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fields = (obj.data.content as any).fields;
+        if ((fields?.bl_id || "").toLowerCase() === targetBlId.toLowerCase()) {
+          return candidateId;
+        }
+      } catch (candidateErr) {
+        console.warn("Failed to inspect created object candidate:", candidateErr);
+      }
+    }
+
+    return "";
+  };
+
   const handleCreateChain = async () => {
     setMessage(null);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (await createChain(newChainBlId, initialHolder)) as any;
-      let createdChainId = readCreatedChainId(result);
-
-      if (!createdChainId && result.digest) {
-        try {
-          const tx = await client.getTransactionBlock({
-            digest: result.digest,
-            options: { showObjectChanges: true },
-          });
-          createdChainId = readCreatedChainId(tx);
-        } catch (resolveErr) {
-          console.warn(
-            "Failed to resolve created endorsement chain from tx:",
-            resolveErr,
-          );
-        }
-      }
+      const createdChainId = await resolveChainId(result, newChainBlId);
 
       if (createdChainId) {
         setChainId(createdChainId);

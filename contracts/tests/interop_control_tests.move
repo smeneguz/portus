@@ -24,6 +24,7 @@ fun test_register_document() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE1,
             string::utf8(b"hash-abc"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,
@@ -41,6 +42,7 @@ fun test_register_document() {
     scenario.next_tx(ALICE);
     {
         let document = test_scenario::take_shared<TradeDocumentControl>(&scenario);
+        assert!(interop_control::linked_ebl_id(&document) == @0xE1);
         assert!(interop_control::controller(&document) == ALICE);
         assert!(interop_control::controller_did(&document) == string::utf8(b"did:iota:testnet:alice"));
         assert!(interop_control::controller_party_code(&document) == string::utf8(b"ALICE-PLAT-A"));
@@ -64,6 +66,7 @@ fun test_initiate_and_accept_transfer() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE2,
             string::utf8(b"hash-001"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,
@@ -148,6 +151,7 @@ fun test_cancel_transfer_records_reason() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE3,
             string::utf8(b"hash-cancel"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,
@@ -220,6 +224,7 @@ fun test_unauthorised_initiate_transfer() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE4,
             string::utf8(b"hash-x"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,
@@ -272,6 +277,7 @@ fun test_unauthorised_accept_transfer() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE5,
             string::utf8(b"hash-y"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,
@@ -343,6 +349,7 @@ fun test_accept_transfer_requires_matching_identity_hash() {
         let clk = clock::create_for_testing(scenario.ctx());
         interop_control::register_document(
             &mut registry,
+            @0xE6,
             string::utf8(b"hash-proof"),
             string::utf8(b"EBL_ENVELOPE"),
             PLATFORM_A,

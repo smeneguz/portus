@@ -7,13 +7,23 @@ type DocumentVaultCardProps = {
   connectedAddress?: string;
   ownerLabel: string;
   expectedHash?: string;
+  delegatedViewerLabel?: string;
+  delegatedViewerAddress?: string;
 };
 
 function sameAddress(a: string | undefined, b: string | undefined): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
-export default function DocumentVaultCard({ record, currentOwner, connectedAddress, ownerLabel, expectedHash }: DocumentVaultCardProps) {
+export default function DocumentVaultCard({
+  record,
+  currentOwner,
+  connectedAddress,
+  ownerLabel,
+  expectedHash,
+  delegatedViewerLabel,
+  delegatedViewerAddress,
+}: DocumentVaultCardProps) {
   if (!record) {
     return (
       <div className="rounded-2xl border border-dashed border-[#cfd9e8] bg-[#fbfdff] p-4 text-sm text-[#5f7389]">
@@ -22,7 +32,7 @@ export default function DocumentVaultCard({ record, currentOwner, connectedAddre
     );
   }
 
-  const canAccess = sameAddress(connectedAddress, currentOwner);
+  const canAccess = sameAddress(connectedAddress, currentOwner) || sameAddress(connectedAddress, delegatedViewerAddress);
   const hashMatches = !expectedHash || expectedHash === record.hash;
 
   return (
@@ -49,6 +59,12 @@ export default function DocumentVaultCard({ record, currentOwner, connectedAddre
             {canAccess ? 'Preview and download enabled' : 'Locked for the current wallet'}
           </p>
         </div>
+        {delegatedViewerAddress && (
+          <div className="rounded-xl border border-[#d7e2ef] bg-[#f8fbff] p-3 md:col-span-2">
+            <p className="text-xs uppercase tracking-wide text-[#60758c]">{delegatedViewerLabel || 'Delegated viewer'}</p>
+            <p className="mt-1 break-all font-mono text-xs text-[#20415f]">{delegatedViewerAddress}</p>
+          </div>
+        )}
       </div>
 
       {canAccess ? (
@@ -58,11 +74,11 @@ export default function DocumentVaultCard({ record, currentOwner, connectedAddre
           mimeType={record.mimeType}
           size={record.size}
           sourceUrl={record.dataUrl}
-          storageNote="This file stays local to this browser. Access follows the current on-chain holder/controller shown above."
+          storageNote="This file stays local to this browser. Access follows the on-chain holder and any linked interop controller shown above."
         />
       ) : (
         <div className="rounded-xl border border-[#f2c2c2] bg-[#fff7f7] p-4 text-sm text-[#9f2d2d]">
-          The file is present in the local vault, but preview and download are disabled because the connected wallet is not the current {ownerLabel.toLowerCase()}.
+          The file is present in the local vault, but preview and download are disabled because the connected wallet is not an authorized on-chain viewer.
         </div>
       )}
     </div>

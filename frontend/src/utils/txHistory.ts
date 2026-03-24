@@ -1,3 +1,5 @@
+import { NETWORK, PACKAGE_ID } from "../config/constants";
+
 export interface TxHistoryEntry {
   digest: string;
   action: string;
@@ -8,14 +10,24 @@ export interface TxHistoryEntry {
   createdAt: number;
 }
 
-const STORAGE_KEY = "portus.tx.history.v1";
-const CLEAR_CUTOFF_KEY = "portus.tx.history.clearCutoff.v1";
 const MAX_ENTRIES = 250;
+
+function scopedKey(base: string): string {
+  return `${base}.${NETWORK}.${PACKAGE_ID.toLowerCase()}`;
+}
+
+function storageKey(): string {
+  return scopedKey("portus.tx.history.v1");
+}
+
+function clearCutoffKey(): string {
+  return scopedKey("portus.tx.history.clearCutoff.v1");
+}
 
 export function getTxHistory(): TxHistoryEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Partial<TxHistoryEntry>[];
     return parsed
@@ -53,27 +65,24 @@ export function recordTx(payload: Omit<TxHistoryEntry, "createdAt">): void {
   );
   const next = [nextEntry, ...deduped].slice(0, MAX_ENTRIES);
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.localStorage.setItem(storageKey(), JSON.stringify(next));
 }
 
 export function clearTxHistory(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(storageKey());
 }
 
 export function getHistoryClearCutoff(): number {
   if (typeof window === "undefined") return 0;
-  const raw = window.localStorage.getItem(CLEAR_CUTOFF_KEY);
+  const raw = window.localStorage.getItem(clearCutoffKey());
   const parsed = Number(raw || 0);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 export function setHistoryClearCutoff(timestampMs: number): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    CLEAR_CUTOFF_KEY,
-    String(Math.max(0, Number(timestampMs) || 0)),
-  );
+  window.localStorage.setItem(clearCutoffKey(), String(Math.max(0, Number(timestampMs) || 0)));
 }
 
 export function clearHistoryView(): number {
@@ -85,5 +94,5 @@ export function clearHistoryView(): number {
 
 export function resetHistoryClearCutoff(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(CLEAR_CUTOFF_KEY);
+  window.localStorage.removeItem(clearCutoffKey());
 }
