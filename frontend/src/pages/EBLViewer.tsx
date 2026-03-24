@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useIotaClient } from '@iota/dapp-kit';
+import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
 import { parseEBLFields, type EBLData } from '../hooks/useEBL';
 import type { EndorsementRecord } from '../hooks/useEndorsement';
 import BLStatusBadge from '../components/BLStatusBadge';
 import PartyCard from '../components/PartyCard';
 import CargoDetails from '../components/CargoDetails';
 import EndorsementTimeline from '../components/EndorsementTimeline';
+import DocumentVaultCard from '../components/DocumentVaultCard';
 import { explorerObjectUrl, PACKAGE_ID } from '../config/constants';
+import { getVaultRecord, type VaultRecord } from '../utils/documentVault';
 
 export default function EBLViewer() {
   const { id } = useParams<{ id: string }>();
+  const account = useCurrentAccount();
   const client = useIotaClient();
   const [ebl, setEbl] = useState<EBLData | null>(null);
   const [endorsements, setEndorsements] = useState<EndorsementRecord[]>([]);
   const [currentHolder, setCurrentHolder] = useState('');
+  const [vaultRecord, setVaultRecord] = useState<VaultRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +32,7 @@ export default function EBLViewer() {
           const fields = (obj.data.content as any).fields;
           setEbl(parseEBLFields(fields));
           setCurrentHolder(fields.current_holder || '');
+          setVaultRecord(getVaultRecord('ebl', id));
         }
 
         // Try to find the endorsement chain for this eBL
@@ -103,6 +108,17 @@ export default function EBLViewer() {
       <div className="surface p-4">
         <h3 className="mb-2 font-bold text-[#123a61]">Content hash</h3>
         <p className="break-all rounded-xl border border-[#d7e2ef] bg-[#f4f8ff] p-3 font-mono text-xs text-[#20415f]">{ebl.content_hash}</p>
+      </div>
+
+      <div className="surface p-5 md:p-6">
+        <h3 className="mb-4 font-bold text-[#123a61]">Attached document access</h3>
+        <DocumentVaultCard
+          record={vaultRecord}
+          currentOwner={currentHolder}
+          connectedAddress={account?.address}
+          ownerLabel="Holder"
+          expectedHash={ebl.content_hash}
+        />
       </div>
     </div>
   );

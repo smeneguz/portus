@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
 import {
   INTEROP_PLATFORM_LABELS,
@@ -8,6 +8,8 @@ import {
   explorerTxUrl,
 } from '../config/constants';
 import { computeSHA256 } from '../hooks/useNotarization';
+import DocumentVaultCard from '../components/DocumentVaultCard';
+import LocalFilePreview from '../components/LocalFilePreview';
 import {
   parseInteropDocumentFields,
   type InteropDocumentData,
@@ -26,6 +28,7 @@ import {
   validateCredentialInput,
   validatePresentationInput,
 } from '../utils/interopIdentity';
+import { getVaultRecord, saveVaultRecord, type VaultRecord } from '../utils/documentVault';
 import { recordTx } from '../utils/txHistory';
 
 type Banner = {
@@ -47,6 +50,8 @@ export default function InteropLayer() {
   const [controllerDid, setControllerDid] = useState('');
   const [controllerPartyCode, setControllerPartyCode] = useState('');
   const [credentialJson, setCredentialJson] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState('');
 
   const [documentId, setDocumentId] = useState('');
   const [toController, setToController] = useState('');
@@ -65,7 +70,14 @@ export default function InteropLayer() {
 
   const [lookupId, setLookupId] = useState('');
   const [lookupResult, setLookupResult] = useState<InteropDocumentData | null>(null);
+  const [lookupVaultRecord, setLookupVaultRecord] = useState<VaultRecord | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [recoveryFile, setRecoveryFile] = useState<File | null>(null);
+  const [recoveryPreviewUrl, setRecoveryPreviewUrl] = useState('');
+  const [recoveryHash, setRecoveryHash] = useState('');
+  const [recoveryPending, setRecoveryPending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recoveryInputRef = useRef<HTMLInputElement | null>(null);
 
   const [lastTx, setLastTx] = useState('');
   const [banner, setBanner] = useState<Banner | null>(null);
@@ -98,12 +110,16 @@ export default function InteropLayer() {
   const uploadAndHash = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (uploadedPreviewUrl) URL.revokeObjectURL(uploadedPreviewUrl);
+    setUploadedFile(file);
+    setUploadedPreviewUrl(URL.createObjectURL(file));
     const hash = await computeSHA256(file);
     setDocumentHash(hash);
-    setBanner({ tone: 'ok', text: `Envelope hash generated from ${file.name}` });
+    setBanner({ tone: 'ok', text: `Envelope hash generated from ${file.name}. Local preview is available below.` });
   };
 
   const platformLabel = (platformId: number) => `${INTEROP_PLATFORM_LABELS[platformId] || `Platform ${platformId}`} (ID ${platformId})`;
+  const sameAddress = (a?: string, b?: string) => (a || '').toLowerCase() === (b || '').toLowerCase();
 
   const handleLoadCredentialSample = async () => {
     setBanner(null);
@@ -175,6 +191,23 @@ export default function InteropLayer() {
       if (createdId) {
         setDocumentId(createdId);
         setLookupId(createdId);
+        setLookupVaultRecord(getVaultRecord('interop', createdId));
+      }
+      if (uploadedFile && createdId && account?.address) {
+        try {
+          const saved = await saveVaultRecord({
+            anchorType: 'interop',
+            anchorId: createdId,
+            title: documentType || 'Trade document envelope',
+            file: uploadedFile,
+            hash: documentHash,
+            createdBy: account.address,
+            initialOwner: account.address,
+          });
+          setLookupVaultRecord(saved);
+        } catch (vaultErr) {
+          console.warn('Failed to save interop file into local vault:', vaultErr);
+        }
       }
       if (result.digest) {
         setLastTx(result.digest);
@@ -295,6 +328,13 @@ export default function InteropLayer() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fields = (obj.data.content as any).fields;
         setLookupResult(parseInteropDocumentFields(fields));
+        setLookupVaultRecord(getVaultRecord('interop', lookupId));
+        setRecoveryFile(null);
+        setRecoveryHash('');
+        if (recoveryPreviewUrl) {
+          URL.revokeObjectURL(recoveryPreviewUrl);
+          setRecoveryPreviewUrl('');
+        }
       } else {
         setBanner({ tone: 'error', text: 'Object not found or not a trade document control token.' });
       }
@@ -303,6 +343,49 @@ export default function InteropLayer() {
       setBanner({ tone: 'error', text: 'Lookup failed. Verify object ID and network.' });
     }
     setLookupLoading(false);
+  };
+
+  const handleRecoveryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (recoveryPreviewUrl) URL.revokeObjectURL(recoveryPreviewUrl);
+    setRecoveryFile(file);
+    setRecoveryPreviewUrl(URL.createObjectURL(file));
+    const hash = await computeSHA256(file);
+    setRecoveryHash(hash);
+  };
+
+  const handleAttachRecoveryFile = async () => {
+    if (!lookupId || !lookupResult || !recoveryFile || !account?.address) return;
+    if (!sameAddress(account.address, lookupResult.controller)) {
+      setBanner({ tone: 'error', text: 'Only the current controller can attach a local file to this control object.' });
+      return;
+    }
+    if (recoveryHash !== lookupResult.document_hash) {
+      setBanner({ tone: 'error', text: 'The selected file does not match the on-chain document hash.' });
+      return;
+    }
+
+    setRecoveryPending(true);
+    setBanner(null);
+    try {
+      const saved = await saveVaultRecord({
+        anchorType: 'interop',
+        anchorId: lookupId,
+        title: lookupResult.document_hash ? `${lookupResult.controller_party_code || 'Interop'} envelope` : 'Trade document envelope',
+        file: recoveryFile,
+        hash: recoveryHash,
+        createdBy: account.address,
+        initialOwner: lookupResult.controller,
+      });
+      setLookupVaultRecord(saved);
+      setBanner({ tone: 'ok', text: 'File attached to the local browser vault for this control object.' });
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to save the file into the local vault.' });
+    } finally {
+      setRecoveryPending(false);
+    }
   };
 
   if (!account) {
@@ -351,11 +434,13 @@ export default function InteropLayer() {
           <div>
             <label className="field-label">Envelope/document hash</label>
             <input className="field-input font-mono text-xs" placeholder="SHA-256 hash" value={documentHash} onChange={(e) => setDocumentHash(e.target.value)} />
-            <input
-              type="file"
-              className="mt-2 block w-full rounded-xl border border-[#cfd9e8] bg-white p-2.5 text-sm text-[#4f657d] file:mr-3 file:rounded-lg file:border-0 file:bg-[#e6efff] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0e4fbf]"
-              onChange={uploadAndHash}
-            />
+            <input ref={fileInputRef} type="file" className="hidden" onChange={uploadAndHash} />
+            <div className="mt-2 flex min-h-[52px] items-center gap-3 rounded-xl border border-[#cfd9e8] bg-white px-3 py-2.5">
+              <button type="button" className="btn-alt shrink-0" onClick={() => fileInputRef.current?.click()}>
+                Choose file
+              </button>
+              <span className="truncate text-sm text-[#4f657d]">{uploadedFile?.name || 'No file selected'}</span>
+            </div>
           </div>
           <div>
             <label className="field-label">Document type</label>
@@ -376,6 +461,19 @@ export default function InteropLayer() {
             <input className="field-input" placeholder="PLAT-1-ABC123" value={controllerPartyCode} onChange={(e) => setControllerPartyCode(e.target.value)} />
           </div>
         </div>
+
+        {uploadedFile && uploadedPreviewUrl && (
+          <div className="mt-4">
+            <LocalFilePreview
+              title="Selected envelope file"
+              fileName={uploadedFile.name}
+              mimeType={uploadedFile.type}
+              size={uploadedFile.size}
+              sourceUrl={uploadedPreviewUrl}
+              storageNote="This preview is local. After document registration, the file is linked to the interop control object in the browser vault."
+            />
+          </div>
+        )}
 
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
@@ -603,6 +701,75 @@ export default function InteropLayer() {
               <p className="text-xs uppercase tracking-wide text-[#60758c]">Last rejection reason</p>
               <p className="mt-1 text-sm text-[#20415f]">{lookupResult.last_rejection_reason || '—'}</p>
             </div>
+            <div className="md:col-span-2">
+              <DocumentVaultCard
+                record={lookupVaultRecord}
+                currentOwner={lookupResult.controller}
+                connectedAddress={account?.address}
+                ownerLabel="Controller"
+                expectedHash={lookupResult.document_hash}
+              />
+            </div>
+            {!lookupVaultRecord && (
+              <div className="md:col-span-2 rounded-2xl border border-[#d7e2ef] bg-[#fbfdff] p-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#173a5a]">Attach or recover local envelope file</p>
+                  <p className="mt-1 text-sm text-[#5f7389]">
+                    This control object has no file in the current browser vault. You can attach it again only if the connected wallet is the current controller and the file hash matches the on-chain document hash.
+                  </p>
+                </div>
+
+                {!sameAddress(account?.address, lookupResult.controller) && (
+                  <div className="mt-4 rounded-xl border border-[#f2c2c2] bg-[#fff7f7] p-4 text-sm text-[#9f2d2d]">
+                    The connected wallet is not the current controller, so local recovery is locked.
+                  </div>
+                )}
+
+                <div className="mt-4">
+                  <input ref={recoveryInputRef} type="file" className="hidden" onChange={handleRecoveryUpload} />
+                  <div className="flex min-h-[52px] items-center gap-3 rounded-xl border border-[#cfd9e8] bg-white px-3 py-2.5">
+                    <button type="button" className="btn-alt shrink-0" onClick={() => recoveryInputRef.current?.click()}>
+                      Choose file
+                    </button>
+                    <span className="truncate text-sm text-[#4f657d]">{recoveryFile?.name || 'No file selected'}</span>
+                  </div>
+                </div>
+
+                {recoveryHash && (
+                  <div className={`mt-3 rounded-xl border p-3 text-xs ${
+                    recoveryHash === lookupResult.document_hash
+                      ? 'border-[#b7e6d3] bg-[#eafaf3] text-[#0e6a47]'
+                      : 'border-[#f2c2c2] bg-[#fff0f0] text-[#9f2d2d]'
+                  }`}>
+                    {recoveryHash === lookupResult.document_hash ? 'Hash matches the on-chain document record.' : 'Hash mismatch: selected file does not match the on-chain document hash.'}
+                  </div>
+                )}
+
+                {recoveryFile && recoveryPreviewUrl && (
+                  <div className="mt-4">
+                    <LocalFilePreview
+                      title="Selected recovery file"
+                      fileName={recoveryFile.name}
+                      mimeType={recoveryFile.type}
+                      size={recoveryFile.size}
+                      sourceUrl={recoveryPreviewUrl}
+                      storageNote="This preview is local. Saving will link the file to the interop control object in the current browser vault."
+                    />
+                  </div>
+                )}
+
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={handleAttachRecoveryFile}
+                    disabled={!sameAddress(account?.address, lookupResult.controller) || !recoveryFile || !recoveryHash || recoveryHash !== lookupResult.document_hash || recoveryPending}
+                    className="btn-main"
+                  >
+                    {recoveryPending ? 'Attaching...' : 'Attach file to this control object'}
+                  </button>
+                </div>
+              </div>
+            )}
             <a href={explorerObjectUrl(lookupId)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#0e4fbf] underline">
               Open object in IOTA Explorer
             </a>

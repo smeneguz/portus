@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useCurrentAccount, useIotaClient, useSignAndExecuteTransaction } from '@iota/dapp-kit';
 import { Transaction } from '@iota/iota-sdk/transactions';
 import { useIssueEBL } from '../hooks/useEBL';
 import { computeSHA256 } from '../hooks/useNotarization';
 import { CARRIER_REGISTRY_ID, CLOCK_ID, explorerTxUrl, PACKAGE_ID } from '../config/constants';
+import LocalFilePreview from '../components/LocalFilePreview';
+import { saveVaultRecord } from '../utils/documentVault';
 import { recordTx } from '../utils/txHistory';
 
 type Notice = {
@@ -38,6 +41,10 @@ export default function CarrierDashboard() {
   const [packages, setPackages] = useState('');
   const [freightTerms, setFreightTerms] = useState(0);
   const [contentHash, setContentHash] = useState('');
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [attachedPreviewUrl, setAttachedPreviewUrl] = useState('');
+  const [issuedEblId, setIssuedEblId] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canIssue =
     Boolean(carrierCapId) &&
@@ -63,6 +70,18 @@ export default function CarrierDashboard() {
         (c.objectType === `${PACKAGE_ID}::ebl::CarrierCap` || c.objectType?.endsWith('::ebl::CarrierCap')),
     );
     return cap?.objectId || '';
+  };
+
+  const extractEblId = (
+    changes: Array<{ type?: string; objectType?: string; objectId?: string }> | undefined,
+  ): string => {
+    if (!changes?.length) return '';
+    const ebl = changes.find(
+      (c) =>
+        c.type === 'created' &&
+        (c.objectType === `${PACKAGE_ID}::ebl::ElectronicBL` || c.objectType?.endsWith('::ebl::ElectronicBL')),
+    );
+    return ebl?.objectId || '';
   };
 
   useEffect(() => {
@@ -180,9 +199,12 @@ export default function CarrierDashboard() {
     const file = e.target.files?.[0];
     if (file) {
       setNotice(null);
+      if (attachedPreviewUrl) URL.revokeObjectURL(attachedPreviewUrl);
+      setAttachedFile(file);
+      setAttachedPreviewUrl(URL.createObjectURL(file));
       const hash = await computeSHA256(file);
       setContentHash(hash);
-      setNotice({ tone: 'ok', text: `Document hash generated from ${file.name}.` });
+      setNotice({ tone: 'ok', text: `Document hash generated from ${file.name}. Local preview is now available below.` });
     }
   };
 
@@ -190,7 +212,8 @@ export default function CarrierDashboard() {
     if (!carrierCapId) return;
     setNotice(null);
     try {
-      const result = await issueEBL({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await issueEBL({
         carrierCapId,
         blNumber,
         shipper,
@@ -206,7 +229,39 @@ export default function CarrierDashboard() {
         numberOfPackages: Number(packages),
         freightTerms,
         contentHash,
-      });
+      })) as any;
+      let createdEblId = extractEblId(
+        (result.objectChanges ?? []) as Array<{ type?: string; objectType?: string; objectId?: string }>,
+      );
+      if (!createdEblId && result.digest) {
+        try {
+          const tx = await client.getTransactionBlock({
+            digest: result.digest,
+            options: { showObjectChanges: true },
+          });
+          createdEblId = extractEblId(
+            (tx.objectChanges ?? []) as Array<{ type?: string; objectType?: string; objectId?: string }>,
+          );
+        } catch (resolveErr) {
+          console.warn('Failed to resolve issued eBL object from tx:', resolveErr);
+        }
+      }
+      if (createdEblId) setIssuedEblId(createdEblId);
+      if (attachedFile && createdEblId && account?.address) {
+        try {
+          await saveVaultRecord({
+            anchorType: 'ebl',
+            anchorId: createdEblId,
+            title: blNumber || 'Electronic Bill of Lading',
+            file: attachedFile,
+            hash: contentHash,
+            createdBy: account.address,
+            initialOwner: shipper,
+          });
+        } catch (vaultErr) {
+          console.warn('Failed to save issued file into local vault:', vaultErr);
+        }
+      }
       if (result.digest) {
         setLastTx(result.digest);
         recordTx({
@@ -218,7 +273,12 @@ export default function CarrierDashboard() {
           details: `${portOfLoading || 'Unknown'} -> ${portOfDischarge || 'Unknown'}`,
         });
       }
-      setNotice({ tone: 'ok', text: 'eBL issued successfully and anchored on-chain.' });
+      setNotice({
+        tone: 'ok',
+        text: createdEblId
+          ? 'eBL issued successfully, anchored on-chain, and linked to a local browser file vault entry.'
+          : 'eBL issued successfully and anchored on-chain.',
+      });
     } catch (err) {
       console.error('Issue failed:', err);
       setNotice({ tone: 'error', text: 'Issuance failed. Verify addresses, hash and wallet balance.' });
@@ -376,12 +436,13 @@ export default function CarrierDashboard() {
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr]">
           <div>
             <label className="field-label">Upload BoL PDF to compute hash</label>
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              className="block w-full rounded-xl border border-[#cfd9e8] bg-white p-2.5 text-sm text-[#4f657d] file:mr-3 file:rounded-lg file:border-0 file:bg-[#e6efff] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0e4fbf]"
-            />
+            <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" />
+            <div className="flex min-h-[52px] items-center gap-3 rounded-xl border border-[#cfd9e8] bg-white px-3 py-2.5">
+              <button type="button" className="btn-alt shrink-0" onClick={() => fileInputRef.current?.click()}>
+                Choose PDF
+              </button>
+              <span className="truncate text-sm text-[#4f657d]">{attachedFile?.name || 'No file selected'}</span>
+            </div>
           </div>
           <div>
             <label className="field-label">Or paste existing SHA-256 hash</label>
@@ -398,6 +459,19 @@ export default function CarrierDashboard() {
           <p className="mt-2 break-all rounded-lg bg-[#f4f8ff] px-3 py-2 font-mono text-xs text-[#365575]">
             Content hash: {contentHash}
           </p>
+        )}
+
+        {attachedFile && attachedPreviewUrl && (
+          <div className="mt-4">
+            <LocalFilePreview
+              title="Selected source document"
+              fileName={attachedFile.name}
+              mimeType={attachedFile.type}
+              size={attachedFile.size}
+              sourceUrl={attachedPreviewUrl}
+              storageNote="This preview is local. After issuance, the file is attached to the eBL object in the browser vault and access follows the current holder."
+            />
+          </div>
         )}
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -426,6 +500,15 @@ export default function CarrierDashboard() {
           <a href={explorerTxUrl(lastTx)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block font-mono text-xs text-[#0e4fbf] underline">
             {lastTx}
           </a>
+        </div>
+      )}
+
+      {issuedEblId && (
+        <div className="rounded-xl border border-[#c9dff8] bg-[#eef6ff] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#3a6289]">Issued eBL object</p>
+          <Link to={`/ebl/${issuedEblId}`} className="mt-1 inline-block break-all font-mono text-xs text-[#0e4fbf] underline">
+            {issuedEblId}
+          </Link>
         </div>
       )}
     </div>

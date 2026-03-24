@@ -131,6 +131,7 @@ Important field meaning:
 - `Content hash`: SHA-256 hash of the document content
 
 You can type the hash manually or generate it from a file upload.
+If you upload the file in the form, the app now shows an immediate local preview and, after issuance, stores the file in the browser vault linked to the issued eBL object.
 
 Practical note: if you want `Wallet A` to issue and also hold the eBL initially, put `Wallet A` in `Shipper address`.
 
@@ -203,6 +204,7 @@ What it does:
 - lets you upload a file and compare its SHA-256 hash with the on-chain `content_hash`
 
 Use this page to prove that the file you have matches the notarized content of the eBL.
+If the file was attached during issuance in the same browser, you can also open it from the eBL detail page.
 
 ## 10. Interop Layer
 
@@ -213,6 +215,8 @@ This page is separate from the eBL endorsement flow. It models cross-platform co
 `Transfer Hub` changes the holder of the Portus eBL.
 
 `Interop Layer` changes the controller of a separate interop control token, together with identity and transfer metadata. That is why the two flows are related conceptually but not identical in the code.
+
+The page also supports a local browser vault for the uploaded envelope file. The file is linked to the interop control object after registration, and preview/download follow the current on-chain controller shown in lookup.
 
 ## 11. Interop: register document control token
 
@@ -226,6 +230,8 @@ Fields:
 - `Controller DID`: DID representing the current controller
 - `Controller party code`: interoperable party identifier for the current controller
 - `Verifiable Credential JSON or JWT`: VC payload whose hash will be bound on-chain
+
+If you upload a file in this section, the app shows a local preview immediately and saves the file into the browser vault once the control object is created.
 
 Identity verification modes:
 
@@ -341,7 +347,17 @@ Use it to track:
 
 Long IDs are truncated visually, but you can click the reference ID to copy it.
 
-## 17. Common mistakes
+## 17. Local vault and access transfer
+
+Portus now includes a browser-local vault for attached files.
+
+- when you issue an eBL from `Carrier Desk`, the uploaded source file is linked to the new `eBL ID`
+- when you register an interop control token, the uploaded envelope file is linked to the new `TradeDocumentControl` object
+- the file stays local to the same browser, but preview/download are enabled only when the connected wallet matches the current on-chain holder or controller
+
+This means the file itself is not stored on IOTA, but the app now demonstrates a real custody/access flow instead of only a detached hash.
+
+## 18. Common mistakes
 
 ### `CarrierCap not minted yet`
 
@@ -376,7 +392,7 @@ Check all four values:
 
 All of them must match the pending metadata stored during initiation.
 
-## 18. Suggested two-wallet demo
+## 19. Suggested two-wallet demo
 
 If you only want the fastest demo path, do this:
 

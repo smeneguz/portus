@@ -8,6 +8,7 @@ import SurrenderPort from './pages/SurrenderPort';
 import VerifyAntiFraud from './pages/VerifyAntiFraud';
 import InteropLayer from './pages/InteropLayer';
 import History from './pages/History';
+import Vault from './pages/Vault';
 
 const NAV_ITEMS = [
   { path: '/carrier', label: 'Carrier Desk', subtitle: 'Register carrier and issue eBL', badge: 'A' },
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { path: '/surrender', label: 'Port Release', subtitle: 'Surrender and accomplish cargo', badge: 'C' },
   { path: '/verify', label: 'Anti-Fraud', subtitle: 'Verify object + document hash', badge: 'D' },
   { path: '/interop', label: 'Interop Layer', subtitle: 'Cross-platform control handshake', badge: 'E' },
+  { path: '/vault', label: 'Vault', subtitle: 'Recover local documents by eBL ID', badge: 'V' },
   { path: '/history', label: 'History', subtitle: 'Unified tx and on-chain events', badge: 'H' },
 ];
 
@@ -127,6 +129,7 @@ export default function App() {
               <Route path="/surrender" element={<SurrenderPort />} />
               <Route path="/verify" element={<VerifyAntiFraud />} />
               <Route path="/interop" element={<InteropLayer />} />
+              <Route path="/vault" element={<Vault />} />
               <Route path="/history" element={<History />} />
             </Routes>
           </section>
