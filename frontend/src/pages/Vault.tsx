@@ -6,7 +6,7 @@ import LocalFilePreview from '../components/LocalFilePreview';
 import { explorerObjectUrl } from '../config/constants';
 import { parseEBLFields, type EBLData } from '../hooks/useEBL';
 import { computeSHA256 } from '../hooks/useNotarization';
-import { clearVault, getVaultRecord, listVaultRecords, saveVaultRecord, type VaultRecord } from '../utils/documentVault';
+import { getVaultRecord, listVaultRecords, saveVaultRecord, type VaultRecord } from '../utils/documentVault';
 import { findLinkedInteropControlForEbl, type LinkedInteropControl } from '../utils/interopLink';
 
 type Banner = {
@@ -79,13 +79,6 @@ export default function Vault() {
 
   const handleLookup = async () => {
     await loadEbl(lookupId);
-  };
-
-  const handleClearVault = () => {
-    clearVault('ebl');
-    setRecentVaultRecords([]);
-    setVaultRecord(null);
-    setBanner({ tone: 'ok', text: 'Local eBL vault cleared for the current deployment scope.' });
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,9 +162,6 @@ export default function Vault() {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" onClick={refreshVault} className="btn-alt">
             Refresh local vault
-          </button>
-          <button type="button" onClick={handleClearVault} className="btn-alt">
-            Clear vault
           </button>
           <p className="text-xs text-[#5f7389]">This vault is local to the current browser profile. It is not remote storage.</p>
         </div>
