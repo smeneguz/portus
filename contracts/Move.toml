@@ -3,7 +3,7 @@ name = "portus"
 edition = "2024.beta"
 
 [dependencies]
-Iota = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "testnet", override = true }
+Iota = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "mainnet", override = true }
 
 [addresses]
 iota = "0x2"

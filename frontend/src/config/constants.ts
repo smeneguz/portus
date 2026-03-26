@@ -1,4 +1,4 @@
-export const NETWORK = (import.meta.env.VITE_NETWORK || 'testnet') as 'testnet' | 'mainnet';
+export const NETWORK = (import.meta.env.VITE_NETWORK || 'mainnet') as 'testnet' | 'mainnet';
 export const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '';
 export const BL_REGISTRY_ID = import.meta.env.VITE_BL_REGISTRY_ID || '';
 export const CARRIER_REGISTRY_ID = import.meta.env.VITE_CARRIER_REGISTRY_ID || '';
