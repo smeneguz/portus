@@ -40,23 +40,28 @@ export default function EBLViewer() {
 
         // Try to find the endorsement chain for this eBL
         const eblType = `${PACKAGE_ID}::endorsement::EndorsementChain`;
-        const events = await client.queryEvents({
-          query: { MoveEventType: `${PACKAGE_ID}::endorsement::EndorsementMade` },
-          limit: 50,
-        });
-        // Find chain object by querying owned objects isn't straightforward,
-        // so we show endorsement events instead
-        const blEndorsements: EndorsementRecord[] = events.data
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .filter((ev: any) => ev.parsedJson?.bl_id === id)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((ev: any) => ({
-            from: ev.parsedJson?.from || '',
-            to: ev.parsedJson?.to || '',
-            endorsement_type: String(ev.parsedJson?.endorsement_type || 0),
-            timestamp: String(ev.parsedJson?.timestamp || 0),
-          }));
-        setEndorsements(blEndorsements);
+        try {
+          const events = await client.queryEvents({
+            query: { MoveEventType: `${PACKAGE_ID}::endorsement::EndorsementMade` },
+            limit: 50,
+          });
+          // Find chain object by querying owned objects isn't straightforward,
+          // so we show endorsement events instead
+          const blEndorsements: EndorsementRecord[] = events.data
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .filter((ev: any) => ev.parsedJson?.bl_id === id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((ev: any) => ({
+              from: ev.parsedJson?.from || '',
+              to: ev.parsedJson?.to || '',
+              endorsement_type: String(ev.parsedJson?.endorsement_type || 0),
+              timestamp: String(ev.parsedJson?.timestamp || 0),
+            }));
+          setEndorsements(blEndorsements);
+        } catch (eventErr) {
+          console.warn('Failed to load endorsement events:', eventErr);
+          setEndorsements([]);
+        }
         void eblType; // used for type reference
       } catch (err) {
         console.error('Failed to load eBL:', err);

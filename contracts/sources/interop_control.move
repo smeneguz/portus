@@ -178,7 +178,7 @@ public fun initiate_transfer(
     proof_hash: String,
     expected_identity_hash: String,
     transfer_nonce: String,
-    expiry_ms: u64,
+    expiry_duration_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -193,7 +193,7 @@ public fun initiate_transfer(
     document.pending_platform = to_platform;
     document.pending_identity_hash = expected_identity_hash;
     document.transfer_nonce = transfer_nonce;
-    document.pending_transfer_expiry_ms = expiry_ms;
+    document.pending_transfer_expiry_ms = now + expiry_duration_ms;
     document.last_transfer_proof_hash = proof_hash;
     document.last_rejection_reason = b"".to_string();
     document.state = STATE_PENDING_TRANSFER;
@@ -208,7 +208,7 @@ public fun initiate_transfer(
         to_party_code: document.pending_party_code,
         to_platform,
         transfer_nonce: document.transfer_nonce,
-        expires_at_ms: expiry_ms,
+        expires_at_ms: document.pending_transfer_expiry_ms,
         timestamp: now,
     });
 }

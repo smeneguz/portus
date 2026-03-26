@@ -17,8 +17,68 @@ export type VaultRecord = {
   initialOwner: string;
 };
 
+const STORAGE_PREFIX = 'portus.document-vault.v1.';
+
 function storageKey(): string {
-  return `portus.document-vault.v1.${NETWORK}.${PACKAGE_ID.toLowerCase()}`;
+  return `${STORAGE_PREFIX}${NETWORK}.${PACKAGE_ID.toLowerCase()}`;
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false;
+  return (
+    error.name === 'QuotaExceededError' ||
+    error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    error.code === 22 ||
+    error.code === 1014
+  );
+}
+
+function purgeLegacyVaultScopes(currentKey: string): void {
+  if (typeof window === 'undefined') return;
+  const keysToDelete: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+    if (!key) continue;
+    if (key === 'portus.document-vault.v1' || (key.startsWith(STORAGE_PREFIX) && key !== currentKey)) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach((key) => window.localStorage.removeItem(key));
+}
+
+function tryWriteVault(records: VaultRecord[]): void {
+  if (typeof window === 'undefined') return;
+  const key = storageKey();
+  const payload = JSON.stringify(records);
+
+  try {
+    window.localStorage.setItem(key, payload);
+    return;
+  } catch (error) {
+    if (!isQuotaExceededError(error)) throw error;
+  }
+
+  purgeLegacyVaultScopes(key);
+
+  try {
+    window.localStorage.setItem(key, payload);
+    return;
+  } catch (error) {
+    if (!isQuotaExceededError(error)) throw error;
+  }
+
+  const trimmed = [...records];
+  while (trimmed.length > 1) {
+    trimmed.pop();
+    try {
+      window.localStorage.setItem(key, JSON.stringify(trimmed));
+      return;
+    } catch (error) {
+      if (!isQuotaExceededError(error)) throw error;
+    }
+  }
+
+  throw new Error('Browser storage quota exceeded. Remove older local vault files or use a smaller document.');
 }
 
 function readVault(): VaultRecord[] {
@@ -36,7 +96,7 @@ function readVault(): VaultRecord[] {
 
 function writeVault(records: VaultRecord[]): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(storageKey(), JSON.stringify(records));
+  tryWriteVault(records);
 }
 
 function fileToDataUrl(file: File): Promise<string> {

@@ -233,7 +233,7 @@ export default function InteropLayer() {
     setBanner(null);
     try {
       const presentation = await validatePresentationInput(presentationJson, toControllerDid, toPartyCode);
-      const expiryMs = Date.now() + Number(expiryMinutes || 0) * 60_000;
+      const expiryDurationMs = Number(expiryMinutes || 0) * 60_000;
       const result = await initiateTransfer({
         documentId,
         toController,
@@ -243,7 +243,7 @@ export default function InteropLayer() {
         proofHash,
         expectedIdentityHash: presentation.hash,
         transferNonce,
-        expiryMs,
+        expiryDurationMs,
       });
       if (result.digest) {
         setLastTx(result.digest);

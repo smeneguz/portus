@@ -27,11 +27,16 @@ function keypairFromPrivKey(privkey: string): Ed25519Keypair {
 }
 
 // ── Configuration ──────────────────────────────────────────────────────
-const PACKAGE_ID = '0xcd4c2548a8995de4ad5aa8af33c76cf846b86a2eccafc99311afc33fe2c97159';
-const BL_REGISTRY_ID = '0xce1750a4c1cc8dff96ecdfdf61cd6be649283f58abd7e5f16e13c9b32b48be8e';
-const CARRIER_REGISTRY_ID = '0x6e6f141e6ffb7ba7323a1e8a34924cac7920a84f5aadb38f4b4be0332f7e70a4';
+const PACKAGE_ID = process.env.VITE_PACKAGE_ID || process.env.PACKAGE_ID || '';
+const BL_REGISTRY_ID = process.env.VITE_BL_REGISTRY_ID || process.env.BL_REGISTRY_ID || '';
+const CARRIER_REGISTRY_ID = process.env.VITE_CARRIER_REGISTRY_ID || process.env.CARRIER_REGISTRY_ID || '';
 const CLOCK_ID = '0x6';
 const EXPLORER_URL = 'https://explorer.iota.org';
+
+if (!PACKAGE_ID || !BL_REGISTRY_ID || !CARRIER_REGISTRY_ID) {
+  console.error('Missing contract IDs. Set VITE_PACKAGE_ID, VITE_BL_REGISTRY_ID and VITE_CARRIER_REGISTRY_ID (or PACKAGE_ID / BL_REGISTRY_ID / CARRIER_REGISTRY_ID).');
+  process.exit(1);
+}
 
 const client = new IotaClient({ url: getFullnodeUrl('testnet') });
 

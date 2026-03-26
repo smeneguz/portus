@@ -5,7 +5,7 @@ use iota::event;
 use iota::clock::Clock;
 
 // === Error codes ===
-const ELengthMismatch: u64 = 200;
+const ELengthMismatch: u64 = 50;
 
 // === Structs ===
 
@@ -79,11 +79,11 @@ public fun batch_notarize(
 ) {
     let len = doc_hashes.length();
     assert!(len == doc_types.length(), ELengthMismatch);
+    let ts = clock.timestamp_ms();
+    let notarized_by = ctx.sender();
 
     let mut i = 0;
     while (i < len) {
-        let ts = clock.timestamp_ms();
-        let notarized_by = ctx.sender();
         let uid = object::new(ctx);
         let doc_id = object::uid_to_address(&uid);
 

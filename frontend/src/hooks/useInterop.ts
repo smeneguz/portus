@@ -108,7 +108,7 @@ export function useInitiateInteropTransfer() {
     proofHash: string;
     expectedIdentityHash: string;
     transferNonce: string;
-    expiryMs: number;
+    expiryDurationMs: number;
   }) => {
     if (!INTEROP_REGISTRY_ID) {
       throw new Error('VITE_INTEROP_REGISTRY_ID is not configured');
@@ -127,7 +127,7 @@ export function useInitiateInteropTransfer() {
         tx.pure.string(params.proofHash),
         tx.pure.string(params.expectedIdentityHash),
         tx.pure.string(params.transferNonce),
-        tx.pure.u64(params.expiryMs),
+        tx.pure.u64(params.expiryDurationMs),
         tx.object(CLOCK_ID),
       ],
     });
