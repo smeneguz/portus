@@ -66,9 +66,12 @@ export default function InteropLayer() {
   const [presentationJson, setPresentationJson] = useState('');
   const [cancelReason, setCancelReason] = useState('Receiver validation failed');
 
+  const [acceptDocumentId, setAcceptDocumentId] = useState('');
   const [acceptDid, setAcceptDid] = useState('');
   const [acceptPartyCode, setAcceptPartyCode] = useState('');
   const [acceptPresentationJson, setAcceptPresentationJson] = useState('');
+  const [acceptDocLoading, setAcceptDocLoading] = useState(false);
+  const [acceptDocData, setAcceptDocData] = useState<InteropDocumentData | null>(null);
 
   const [lookupId, setLookupId] = useState('');
   const [lookupResult, setLookupResult] = useState<InteropDocumentData | null>(null);
@@ -147,6 +150,34 @@ export default function InteropLayer() {
       console.error(err);
       setBanner({ tone: 'error', text: err instanceof Error ? err.message : 'Failed to generate signed VP sample.' });
     }
+  };
+
+  const handleLoadAcceptDocument = async () => {
+    if (!acceptDocumentId) return;
+    setAcceptDocLoading(true);
+    setAcceptDocData(null);
+    setBanner(null);
+    try {
+      const obj = await client.getObject({
+        id: acceptDocumentId,
+        options: { showContent: true },
+      });
+      if (obj.data?.content?.dataType === 'moveObject') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fields = (obj.data.content as any).fields;
+        const data = parseInteropDocumentFields(fields);
+        setAcceptDocData(data);
+        if (data.pending_controller_did) setAcceptDid(data.pending_controller_did);
+        if (data.pending_party_code) setAcceptPartyCode(data.pending_party_code);
+        setBanner({ tone: 'ok', text: 'Pending transfer data loaded from chain. DID and party code pre-filled.' });
+      } else {
+        setBanner({ tone: 'error', text: 'Object not found or not a trade document control token.' });
+      }
+    } catch (err) {
+      console.error(err);
+      setBanner({ tone: 'error', text: 'Failed to load document. Verify the object ID.' });
+    }
+    setAcceptDocLoading(false);
   };
 
   const handleLoadAcceptPresentationSample = async () => {
@@ -268,8 +299,9 @@ export default function InteropLayer() {
     setBanner(null);
     try {
       const presentation = await validatePresentationInput(acceptPresentationJson, acceptDid, acceptPartyCode);
+      const targetDocId = acceptDocumentId || documentId;
       const result = await acceptTransfer({
-        documentId,
+        documentId: targetDocId,
         recipientDid: acceptDid,
         recipientPartyCode: acceptPartyCode,
         identityHash: presentation.hash,
@@ -280,9 +312,9 @@ export default function InteropLayer() {
           digest: result.digest,
           action: 'Interop Accept Transfer',
           area: 'interop',
-          referenceId: documentId || undefined,
+          referenceId: targetDocId || undefined,
           referenceLabel: 'Control Object ID',
-          details: `${acceptPartyCode} accepted control on ${platformLabel(Number(lookupResult?.pending_platform || lookupResult?.current_platform || 0))}`,
+          details: `${acceptPartyCode} accepted control on ${platformLabel(Number(acceptDocData?.pending_platform || lookupResult?.pending_platform || lookupResult?.current_platform || 0))}`,
         });
       }
       setBanner({ tone: 'ok', text: `Transfer accepted. DID, party code and VP evidence matched the pending transfer (${presentation.mode === 'jwt-signature' ? 'JWT signature verified' : 'structured VP validated'}).` });
@@ -597,6 +629,33 @@ export default function InteropLayer() {
         <h2 className="section-title">Accept transfer with VP verification</h2>
         <p className="section-subtitle mt-1">Recipient must submit a VP bundle whose DID, party code and hash match the pending metadata stored on-chain. Signed JWT VP is supported through IOTA Identity.</p>
 
+        <div className="mt-4">
+          <label className="field-label">Document control object ID</label>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+            <input className="field-input font-mono text-xs" placeholder="0x..." value={acceptDocumentId} onChange={(e) => setAcceptDocumentId(e.target.value)} />
+            <button onClick={handleLoadAcceptDocument} disabled={acceptDocLoading || !acceptDocumentId} className="btn-alt">
+              {acceptDocLoading ? 'Loading...' : 'Load pending transfer'}
+            </button>
+          </div>
+        </div>
+
+        {acceptDocData && (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="rounded-lg border border-[#d7e2ef] bg-white px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">State</p>
+              <p className="mt-0.5 text-sm font-semibold text-[#173a5a]">{INTEROP_STATE_LABELS[Number(acceptDocData.state)] ?? acceptDocData.state}</p>
+            </div>
+            <div className="rounded-lg border border-[#d7e2ef] bg-white px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Pending controller</p>
+              <p className="mt-0.5 break-all font-mono text-xs text-[#20415f]">{acceptDocData.pending_controller || '—'}</p>
+            </div>
+            <div className="rounded-lg border border-[#d7e2ef] bg-white px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-[#60758c]">Expiry</p>
+              <p className="mt-0.5 text-sm text-[#173a5a]">{formatExpiryTimestamp(acceptDocData.pending_transfer_expiry_ms)}</p>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="field-label">Recipient DID</label>
@@ -623,7 +682,7 @@ export default function InteropLayer() {
         </div>
 
         <div className="mt-4">
-          <button onClick={handleAccept} disabled={acceptPending || !documentId || !acceptDid || !acceptPartyCode || !acceptPresentationJson || !INTEROP_REGISTRY_ID} className="btn-success">
+          <button onClick={handleAccept} disabled={acceptPending || !(acceptDocumentId || documentId) || !acceptDid || !acceptPartyCode || !acceptPresentationJson || !INTEROP_REGISTRY_ID} className="btn-success">
             {acceptPending ? 'Accepting...' : 'Accept Transfer'}
           </button>
         </div>
