@@ -118,9 +118,17 @@ function decodeJwtPayload(raw: string): JwtPayload {
 async function getIdentitySdk(): Promise<typeof import('@iota/identity-wasm/web/index.js')> {
   if (!sdkPromise) {
     sdkPromise = (async () => {
-      const sdk = await import('@iota/identity-wasm/web/index.js');
-      await sdk.init(wasmUrl);
-      return sdk;
+      try {
+        const sdk = await import('@iota/identity-wasm/web/index.js');
+        await sdk.init(wasmUrl);
+        return sdk;
+      } catch (err) {
+        sdkPromise = null;
+        if (err instanceof TypeError && (err.message.includes('dynamically imported module') || err.message.includes('Failed to fetch'))) {
+          window.location.reload();
+        }
+        throw err;
+      }
     })();
   }
   return sdkPromise;
