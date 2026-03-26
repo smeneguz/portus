@@ -1,5 +1,5 @@
 /**
- * Portus Seed Demo — Pre-populates testnet with demo data for the frontend
+ * Portus Seed Demo — Pre-populates the selected network with demo data for the frontend
  * Run: npx tsx seed-demo.ts
  */
 
@@ -11,9 +11,11 @@ import { decodeIotaPrivateKey } from '@iota/iota-sdk/cryptography';
 const PACKAGE_ID = process.env.VITE_PACKAGE_ID || process.env.PACKAGE_ID || '';
 const BL_REGISTRY_ID = process.env.VITE_BL_REGISTRY_ID || process.env.BL_REGISTRY_ID || '';
 const CARRIER_REGISTRY_ID = process.env.VITE_CARRIER_REGISTRY_ID || process.env.CARRIER_REGISTRY_ID || '';
+const NETWORK = (process.env.VITE_NETWORK || process.env.IOTA_NETWORK || 'testnet') as 'testnet' | 'mainnet';
+const RPC_URL = process.env.VITE_RPC_URL || process.env.IOTA_RPC_URL || getFullnodeUrl(NETWORK);
 const CLOCK_ID = '0x6';
 
-const client = new IotaClient({ url: getFullnodeUrl('testnet') });
+const client = new IotaClient({ url: RPC_URL });
 
 function keypairFromPrivKey(privkey: string): Ed25519Keypair {
   const { secretKey } = decodeIotaPrivateKey(privkey);
@@ -34,7 +36,7 @@ const carrier = keypairFromPrivKey(carrierKey);
 const shipper = keypairFromPrivKey(shipperKey);
 
 async function main() {
-  console.log('Seeding demo data...');
+  console.log(`Seeding demo data on ${NETWORK}...`);
 
   const carrierAddr = carrier.toIotaAddress();
   const shipperAddr = shipper.toIotaAddress();

@@ -30,6 +30,8 @@ function keypairFromPrivKey(privkey: string): Ed25519Keypair {
 const PACKAGE_ID = process.env.VITE_PACKAGE_ID || process.env.PACKAGE_ID || '';
 const BL_REGISTRY_ID = process.env.VITE_BL_REGISTRY_ID || process.env.BL_REGISTRY_ID || '';
 const CARRIER_REGISTRY_ID = process.env.VITE_CARRIER_REGISTRY_ID || process.env.CARRIER_REGISTRY_ID || '';
+const NETWORK = (process.env.VITE_NETWORK || process.env.IOTA_NETWORK || 'testnet') as 'testnet' | 'mainnet';
+const RPC_URL = process.env.VITE_RPC_URL || process.env.IOTA_RPC_URL || getFullnodeUrl(NETWORK);
 const CLOCK_ID = '0x6';
 const EXPLORER_URL = 'https://explorer.iota.org';
 
@@ -38,7 +40,7 @@ if (!PACKAGE_ID || !BL_REGISTRY_ID || !CARRIER_REGISTRY_ID) {
   process.exit(1);
 }
 
-const client = new IotaClient({ url: getFullnodeUrl('testnet') });
+const client = new IotaClient({ url: RPC_URL });
 
 // ── Test Results ───────────────────────────────────────────────────────
 interface TestResult {
@@ -66,6 +68,10 @@ function fail(name: string, detail: string) {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 async function fundAddress(address: string, retries = 5): Promise<void> {
+  if (NETWORK !== 'testnet') {
+    throw new Error('Automatic faucet funding is only available on testnet. Prefund the addresses manually on mainnet.');
+  }
+
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch('https://faucet.testnet.iota.cafe/gas', {
@@ -621,9 +627,9 @@ async function main() {
   console.log(`  NotarizedDoc:     ${notarizedDocId}`);
   console.log('');
   console.log('── Explorer Links ──────────────────────────────');
-  console.log(`  Package:  ${EXPLORER_URL}/object/${PACKAGE_ID}?network=testnet`);
-  console.log(`  eBL:      ${EXPLORER_URL}/object/${eblId}?network=testnet`);
-  console.log(`  Chain:    ${EXPLORER_URL}/object/${endorsementChainId}?network=testnet`);
+  console.log(`  Package:  ${EXPLORER_URL}/object/${PACKAGE_ID}?network=${NETWORK}`);
+  console.log(`  eBL:      ${EXPLORER_URL}/object/${eblId}?network=${NETWORK}`);
+  console.log(`  Chain:    ${EXPLORER_URL}/object/${endorsementChainId}?network=${NETWORK}`);
   console.log('');
 
   // Results table

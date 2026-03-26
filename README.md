@@ -56,13 +56,13 @@ The frontend now supports two identity evidence modes. The strongest path is a s
 
 ## Smart contracts
 
-| Module | Purpose | Main functions |
-| --- | --- | --- |
-| `ebl` | eBL lifecycle and port-release state | `register_carrier`, `issue_ebl`, `update_status`, `surrender`, `accomplish` |
-| `endorsement` | Title transfer and endorsement trail | `create_chain`, `endorse_and_transfer` |
-| `notarization` | Hash anchoring and integrity checks | `notarize`, `verify`, `batch_notarize` |
-| `carrier_registry` | Carrier profile metadata | `register`, `increment_bls` |
-| `interop_control` | Cross-platform control tracking and settlement | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
+| Module             | Purpose                                        | Main functions                                                                 |
+| ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `ebl`              | eBL lifecycle and port-release state           | `register_carrier`, `issue_ebl`, `update_status`, `surrender`, `accomplish`    |
+| `endorsement`      | Title transfer and endorsement trail           | `create_chain`, `endorse_and_transfer`                                         |
+| `notarization`     | Hash anchoring and integrity checks            | `notarize`, `verify`, `batch_notarize`                                         |
+| `carrier_registry` | Carrier profile metadata                       | `register`, `increment_bls`                                                    |
+| `interop_control`  | Cross-platform control tracking and settlement | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
 
 ## Local setup
 
@@ -81,23 +81,23 @@ cd contracts
  iota move test
 ```
 
-### Deploy to testnet
+### Deploy to testnet/mainnet
 
 ```bash
 cd scripts
 chmod +x deploy.sh
-./deploy.sh
+TARGET_NETWORK=testnet/mainnet bash deploy.sh
 ```
 
 The script prints the values you need for the frontend configuration:
 
 ```env
-VITE_NETWORK=testnet
+VITE_NETWORK=testnet/mainnet
 VITE_PACKAGE_ID=0x...
 VITE_BL_REGISTRY_ID=0x...
 VITE_CARRIER_REGISTRY_ID=0x...
 VITE_INTEROP_REGISTRY_ID=0x...
-VITE_RPC_URL=https://api.testnet.iota.cafe:443
+VITE_RPC_URL=https://api.testnet.iota.cafe:443 (or empty for mainnet)
 ```
 
 ### Run the frontend

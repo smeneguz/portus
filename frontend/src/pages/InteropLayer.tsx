@@ -3,6 +3,7 @@ import { useCurrentAccount, useIotaClient } from '@iota/dapp-kit';
 import {
   INTEROP_PLATFORM_LABELS,
   INTEROP_REGISTRY_ID,
+  NETWORK,
   INTEROP_STATE_LABELS,
   explorerObjectUrl,
   explorerTxUrl,
@@ -460,7 +461,7 @@ export default function InteropLayer() {
           </div>
           <div>
             <label className="field-label">Controller DID</label>
-            <input className="field-input" placeholder="did:iota:testnet:platform-1:..." value={controllerDid} onChange={(e) => setControllerDid(e.target.value)} />
+            <input className="field-input" placeholder={`did:iota:${NETWORK}:platform-1:...`} value={controllerDid} onChange={(e) => setControllerDid(e.target.value)} />
           </div>
           <div>
             <label className="field-label">Controller party code</label>
@@ -522,7 +523,7 @@ export default function InteropLayer() {
           </div>
           <div>
             <label className="field-label">Recipient DID</label>
-            <input className="field-input" placeholder="did:iota:testnet:platform-2:..." value={toControllerDid} onChange={(e) => setToControllerDid(e.target.value)} />
+            <input className="field-input" placeholder={`did:iota:${NETWORK}:platform-2:...`} value={toControllerDid} onChange={(e) => setToControllerDid(e.target.value)} />
           </div>
           <div>
             <label className="field-label">Recipient party code</label>

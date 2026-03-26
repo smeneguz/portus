@@ -3,7 +3,7 @@ export const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '';
 export const BL_REGISTRY_ID = import.meta.env.VITE_BL_REGISTRY_ID || '';
 export const CARRIER_REGISTRY_ID = import.meta.env.VITE_CARRIER_REGISTRY_ID || '';
 export const INTEROP_REGISTRY_ID = import.meta.env.VITE_INTEROP_REGISTRY_ID || '';
-export const RPC_URL = import.meta.env.VITE_RPC_URL || 'https://api.testnet.iota.cafe:443';
+export const RPC_URL = import.meta.env.VITE_RPC_URL || '';
 export const CLOCK_ID = '0x6';
 
 export const EXPLORER_URL = 'https://explorer.iota.org';

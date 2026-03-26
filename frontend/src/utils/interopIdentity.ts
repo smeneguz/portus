@@ -1,5 +1,6 @@
 import wasmUrl from '@iota/identity-wasm/web/identity_wasm_bg.wasm?url';
 import type * as IdentitySdk from '@iota/identity-wasm/web/index.js';
+import { NETWORK } from '../config/constants';
 
 export type IdentityClaims = {
   did: string;
@@ -430,7 +431,7 @@ export async function validatePresentationInput(raw: string, expectedDid: string
 export function defaultInteropDid(address: string | undefined, platform: number): string {
   const normalized = (address || '').toLowerCase().replace(/^0x/, '');
   if (!normalized) return '';
-  return `did:iota:testnet:platform-${platform}:${normalized}`;
+  return `did:iota:${NETWORK}:platform-${platform}:${normalized}`;
 }
 
 export function defaultPartyCode(platform: number, address: string | undefined): string {
