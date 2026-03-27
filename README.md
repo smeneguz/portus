@@ -12,6 +12,23 @@
 
 ---
 
+## Live
+
+| | Link |
+|---|---|
+| **App** | [portus-five.vercel.app](https://portus-five.vercel.app/) |
+| **Package (Mainnet)** | [`0xdeadee97...e108`](https://explorer.iota.org/object/0xdeadee97bb146c273e9cc55ec26c1d2936133119acc1b2fc0b542e279007e108?network=mainnet) |
+| **Deploy TX** | [`B7EDpYuY...CYeD`](https://explorer.iota.org/txblock/B7EDpYuYjfCuSjiEh3ucefvweACtanw55zhVrKfRCYeD?network=mainnet) |
+| **Video Demo** | [YouTube](https://youtu.be/Hw4A1folQYI) |
+
+<p align="center">
+  <a href="https://youtu.be/Hw4A1folQYI">
+    <img src="https://img.youtube.com/vi/Hw4A1folQYI/maxresdefault.jpg" width="600" alt="Portus Demo Video" />
+  </a>
+</p>
+
+---
+
 ## Why this project exists
 
 The eBL market is moving, but it is still fragmented. Platforms can digitize the document, yet cross-platform handover, auditability and neutral proof of control remain hard. Portus addresses that gap by combining an on-chain eBL workflow with an interoperability layer that stores document envelope hashes, controller metadata and transfer state in a shared IOTA object model.
@@ -63,6 +80,15 @@ The frontend now supports two identity evidence modes. The strongest path is a s
 | `notarization`     | Hash anchoring and integrity checks            | `notarize`, `verify`, `batch_notarize`                                         |
 | `carrier_registry` | Carrier profile metadata                       | `register`, `increment_bls`                                                    |
 | `interop_control`  | Cross-platform control tracking and settlement | `register_document`, `initiate_transfer`, `accept_transfer`, `cancel_transfer` |
+
+### Mainnet deployment
+
+| Object | ID |
+|--------|----|
+| Package | `0xdeadee97bb146c273e9cc55ec26c1d2936133119acc1b2fc0b542e279007e108` |
+| BLRegistry | `0xc737577bc5fa5976140898b2102c3ed11f2c575620dc7f1b1bb7a8284703fd59` |
+| GlobalCarrierRegistry | `0x14033eab3a9418fead914f2da81152f41739f4d5f987085374cf795bfcd05415` |
+| InteropRegistry | `0xdf01507dc93c5a5f5fc1c912f860239f6bdba78fc68c7a62f87adc40a316a0ee` |
 
 ## Local setup
 
@@ -118,9 +144,6 @@ The current codebase has:
 - Move unit tests passing with `iota move test` (`20/20`)
 - an end-to-end script in `scripts/e2e-test.ts` for funded testnet wallets
 
-## Suggested demo narrative
-
-The strongest live flow is not “we built an eBL app”. It is: issue an eBL, notarize its content, transfer title through endorsements, then show a separate cross-platform control handover through the interop object with DID-bound metadata and a two-step handshake. That makes Portus look like a neutral control and audit layer rather than another isolated document platform.
 
 ## Documentation
 
